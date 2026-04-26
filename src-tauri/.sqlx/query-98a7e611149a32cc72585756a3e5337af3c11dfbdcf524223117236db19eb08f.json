@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM calendar_events WHERE uid = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "98a7e611149a32cc72585756a3e5337af3c11dfbdcf524223117236db19eb08f"
+}

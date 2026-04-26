@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO calendar_events\n            (uid, summary, start_time, end_time, location, description, sequence)\n            VALUES (?, ?,?, ? ,? ,?, ? )",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "45bcecdbb526fecd548189ed15fa5464b8334f194c887a2b9c3ce79c6f162fe3"
+}
