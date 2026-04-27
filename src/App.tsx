@@ -1,64 +1,137 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
+import TitleBar from "./components/TitleBar";
+import Sidebar from "./components/Sidebar";
+import NoteList from "./components/NoteList";
+import Editor from "./components/Editor";
+import AiPanel from "./components/AiPanel";
+import TodayView from "./components/TodayView";
+import ScheduleView from "./components/ScheduleView";
+import GradesView from "./components/GradesView";
+import CommandPalette from "./components/CommandPalette";
+import SettingsPanel from "./components/SettingsPanel";
+import Onboarding, { type DetectedCourse } from "./components/Onboarding";
+import { type CalEvent } from "./lib/events";
 
-interface CalEvent {
-  uid: string;
-  summary: string;
-  start: string | null;
-  end: string | null;
-  location: string | null;
-  description: string | null;
-  sequence: number;
+function loadCourses(): Record<string, { code: string; name: string; color: string }> {
+  try {
+    const stored = localStorage.getItem("mizu-courses");
+    if (!stored) return {};
+    const arr: DetectedCourse[] = JSON.parse(stored);
+    return Object.fromEntries(
+      arr.map((c) => [c.code.toLowerCase().replace("-", ""), { code: c.code, name: c.name, color: c.color }])
+    );
+  } catch {
+    return {};
+  }
 }
 
-function App() {
-  const [url, setUrl] = useState("");
-  const [events, setEvents] = useState<CalEvent[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+export default function App() {
+  const [setupDone, setSetupDone] = useState(() => !!localStorage.getItem("mizu-setup-complete"));
+  const [courses, setCourses] = useState<Record<string, { code: string; name: string; color: string }>>(loadCourses);
+  const [events, setEvents] = useState<CalEvent[]>([]);
 
-  async function fetchCalendar() {
-    if (!url.trim()) return;
-    setLoading(true);
-    setError(null);
-    setEvents(null);
-    try {
-      const result = await invoke<CalEvent[]>("fetch_calendar", { url });
-      setEvents(result);
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setLoading(false);
+  const [activeNav, setActiveNav] = useState("today");
+  const [activeNote, setActiveNote] = useState("n14");
+  const [showAi, setShowAi] = useState(true);
+  const [showPalette, setShowPalette] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [theme, setTheme] = useState("light");
+
+  useEffect(() => {
+    if (setupDone) {
+      invoke<CalEvent[]>("sync_calendar").then(setEvents).catch(console.error);
     }
+  }, [setupDone]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.classList.toggle("dark", theme === "dark");
+  }, [theme]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setShowPalette((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  function handleOnboardingComplete(detected: DetectedCourse[]) {
+    const map = Object.fromEntries(
+      detected.map((c) => [c.code.toLowerCase().replace("-", ""), { code: c.code, name: c.name, color: c.color }])
+    );
+    setCourses(map);
+    setSetupDone(true);
+    invoke<CalEvent[]>("sync_calendar").then(setEvents).catch(console.error);
   }
 
+  function handleResetOnboarding() {
+    setCourses({});
+    setEvents([]);
+    setSetupDone(false);
+    setShowSettings(false);
+  }
+
+  if (!setupDone) {
+    return <Onboarding onComplete={handleOnboardingComplete} />;
+  }
+
+  const isToday = activeNav === "today";
+  const isSchedule = activeNav === "schedule";
+  const isGrades = activeNav === "grades";
+  const course = courses[activeNav];
+
+  let breadcrumb: string[];
+  if (isToday) breadcrumb = ["Mizu", "Today"];
+  else if (isSchedule) breadcrumb = ["Mizu", "Schedule"];
+  else if (isGrades) breadcrumb = ["Mizu", "Grades"];
+  else if (course) breadcrumb = ["Mizu", course.code];
+  else breadcrumb = ["Mizu", activeNav];
+
   return (
-    <main className="container">
-      <h1>Calendar Viewer</h1>
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          fetchCalendar();
-        }}
-      >
-        <input
-          id="url-input"
-          value={url}
-          onChange={(e) => setUrl(e.currentTarget.value)}
-          placeholder="Enter iCal URL..."
-        />
-        <button type="submit" disabled={loading}>
-          {loading ? "Fetching…" : "Fetch"}
-        </button>
-      </form>
-      {error && <p className="error">{error}</p>}
-      {events !== null && (
-        <pre className="json-output">{JSON.stringify(events, null, 2)}</pre>
-      )}
-    </main>
+    <div className="app">
+      <TitleBar
+        breadcrumb={breadcrumb}
+        onTogglePalette={() => setShowPalette(true)}
+        onToggleAi={() => setShowAi((v) => !v)}
+        onToggleTheme={() => setTheme((t) => (t === "light" ? "dark" : "light"))}
+        onToggleSettings={() => setShowSettings((v) => !v)}
+        theme={theme}
+      />
+      <div className="app-body">
+        <Sidebar activeId={activeNav} onSelect={setActiveNav} courses={courses} />
+        {isToday ? (
+          <TodayView events={events} courses={courses} />
+        ) : isSchedule ? (
+          <ScheduleView events={events} courses={courses} />
+        ) : isGrades ? (
+          <GradesView courses={courses} />
+        ) : course ? (
+          <>
+            <NoteList
+              activeId={activeNote}
+              onSelect={setActiveNote}
+              courseColor={course.color}
+              courseCode={course.code}
+              courseName={course.name}
+            />
+            <Editor />
+          </>
+        ) : (
+          <div className="empty-pane">
+            <div className="empty-mark">水</div>
+            <div className="empty-title">Pick a course or view from the sidebar</div>
+          </div>
+        )}
+        {showAi && !isToday && !isSchedule && !isGrades && !showSettings && <AiPanel onClose={() => setShowAi(false)} />}
+        {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} onResetOnboarding={handleResetOnboarding} />}
+      </div>
+      {showPalette && <CommandPalette onClose={() => setShowPalette(false)} />}
+    </div>
   );
 }
-
-export default App;

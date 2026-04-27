@@ -12,9 +12,17 @@
   "app": {
     "windows": [
       {
-        "title": "mizu",
-        "width": 800,
-        "height": 600
+        "title": "Mizu",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 480,
+        "minHeight": 400,
+        "resizable": true,
+        "fullscreen": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "backgroundColor": "#F7F6F3",
+        "dragDropEnabled": true
       }
     ],
     "security": {

@@ -24,9 +24,84 @@ pub struct SyncDiff {
     pub removed: Vec<String>,
 }
 
-impl SyncDiff {
-    pub fn is_empty(&self) -> bool {
-        self.added.is_empty() && self.updated.is_empty() && self.removed.is_empty()
+pub async fn read_events(pool: &SqlitePool) -> Result<Vec<CalEvent>> {
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS calendar_events (
+            uid TEXT PRIMARY KEY,
+            summary TEXT NOT NULL,
+            start_time TEXT,
+            end_time TEXT,
+            location TEXT,
+            description TEXT,
+            sequence INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )",
+    )
+    .execute(pool)
+    .await
+    .context("migrate")?;
+
+    let rows = sqlx::query!(
+        "SELECT uid, summary, start_time, end_time, location, description, sequence FROM calendar_events"
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| CalEvent {
+            uid: r.uid.unwrap_or_default(),
+            summary: r.summary,
+            start: r.start_time.and_then(|s: String| s.parse().ok()),
+            end: r.end_time.and_then(|s: String| s.parse().ok()),
+            location: r.location,
+            description: r.description,
+            sequence: r.sequence,
+        })
+        .collect())
+}
+
+/// On startup: re-sync using the URL stored from a previous onboarding.
+/// Returns current events (synced if URL was stored, otherwise whatever is in DB).
+pub async fn sync_from_stored_url(pool: SqlitePool) -> Result<Vec<CalEvent>> {
+    // Ensure tables exist first
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS calendar_events (
+            uid TEXT PRIMARY KEY,
+            summary TEXT NOT NULL,
+            start_time TEXT,
+            end_time TEXT,
+            location TEXT,
+            description TEXT,
+            sequence INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )",
+    )
+    .execute(&pool)
+    .await
+    .context("migrate calendar_events")?;
+
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS calendar_meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )",
+    )
+    .execute(&pool)
+    .await
+    .context("migrate calendar_meta")?;
+
+    let url = sqlx::query!("SELECT value FROM calendar_meta WHERE key = 'url'")
+        .fetch_optional(&pool)
+        .await?
+        .map(|r| r.value);
+
+    if let Some(url) = url {
+        let syncer = CalendarSync::new(pool, url).await?;
+        syncer.sync().await?;
+        syncer.events().await
+    } else {
+        read_events(&pool).await
     }
 }
 
@@ -44,6 +119,12 @@ impl CalendarSync {
             http: reqwest::Client::builder().use_rustls_tls().build()?,
         };
         this.migrate().await?;
+        sqlx::query!(
+            "INSERT INTO calendar_meta (key, value) VALUES ('url', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+            this.url
+        )
+        .execute(&this.pool)
+        .await?;
         Ok(this)
     }
 

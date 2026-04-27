@@ -1,0 +1,405 @@
+/* ============================================================
+   Tolaria Design System — colors_and_type.css
+   Lifted directly from src/index.css and src/theme.json in the
+   tolaria codebase. Drop this in <head> or @import to get the
+   full app color + type contract.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap');
+
+/* ------------------------------------------------------------
+   Light theme — the canonical Tolaria palette
+   ------------------------------------------------------------ */
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* Surfaces */
+  --surface-app:       #FFFFFF;
+  --surface-sidebar:   #F7F6F3;   /* warm off-white, the unmistakable Tolaria sidebar */
+  --surface-panel:     #FFFFFF;
+  --surface-card:      #FFFFFF;
+  --surface-popover:   #FFFFFF;
+  --surface-input:     #FFFFFF;
+  --surface-button:    #EBEBEA;
+  --surface-dialog:    #FFFFFF;
+  --surface-editor:    #FFFFFF;
+  --surface-overlay:   rgba(0, 0, 0, 0.30);
+
+  /* Text */
+  --text-primary:   #37352F;   /* warm near-black */
+  --text-secondary: #787774;
+  --text-tertiary:  #787774;
+  --text-muted:     #B4B4B4;
+  --text-faint:     #B4B4B4;
+  --text-heading:   #37352F;
+  --text-inverse:   #FFFFFF;
+
+  /* Borders */
+  --border-default: #E9E9E7;
+  --border-subtle:  #E9E9E7;
+  --border-strong:  #D9D9D6;
+  --border-input:   #E9E9E7;
+  --border-dialog:  #E9E9E7;
+  --border-focus:   #155DFF;
+
+  /* States */
+  --state-hover:           #EBEBEA;
+  --state-hover-subtle:    #F0F0EF;
+  --state-selected:        #E8F4FE;
+  --state-selected-strong: #D8ECFE;
+  --state-active:          #E8F4FE;
+  --state-focus-ring:      #155DFF;
+  --state-drag-target:     #155DFF18;
+  --state-disabled:        #F0F0EF;
+
+  /* Accents — used as type colors, links, buttons, droplet brand */
+  --accent-blue:        #155DFF;
+  --accent-blue-bg:     #155DFF18;
+  --accent-blue-hover:  #0D4AD6;
+  --accent-blue-light:  #155DFF14;
+  --accent-green:       #38A169;
+  --accent-green-light: rgba(56, 161, 105, 0.10);
+  --accent-orange:      #D9730D;
+  --accent-orange-light:rgba(217, 115,  13, 0.10);
+  --accent-red:         #E53E3E;
+  --accent-red-light:   rgba(229,  62,  62, 0.10);
+  --accent-purple:      #805AD5;
+  --accent-purple-light:rgba(128,  90, 213, 0.10);
+  --accent-yellow:      #D69E2E;
+  --accent-yellow-light:rgba(214, 158,  46, 0.10);
+  --accent-teal:        #319795;
+  --accent-teal-light:  rgba( 49, 151, 149, 0.10);
+  --accent-pink:        #D53F8C;
+  --accent-pink-light:  rgba(213,  63, 140, 0.10);
+  --accent-gray:        #718096;
+  --accent-gray-light:  rgba(113, 128, 150, 0.10);
+
+  /* Feedback */
+  --feedback-info-text:    var(--accent-blue);
+  --feedback-info-bg:      var(--accent-blue-light);
+  --feedback-success-text: var(--accent-green);
+  --feedback-success-bg:   var(--accent-green-light);
+  --feedback-warning-text: #92400E;
+  --feedback-warning-bg:   #FEF3C7;
+  --feedback-warning-border:#D97706;
+  --feedback-error-text:   var(--accent-red);
+  --feedback-error-bg:     var(--accent-red-light);
+
+  /* Syntax / diff (markdown editor and code blocks) */
+  --syntax-heading:           #0969DA;
+  --syntax-link:              #0969DA;
+  --syntax-monospace:         #C9383E;
+  --syntax-monospace-bg:      rgba(175, 184, 193, 0.15);
+  --syntax-muted:             #636C76;
+  --syntax-frontmatter-key:   #C9383E;
+  --syntax-frontmatter-value: #2A7E4F;
+  --syntax-highlight-comment: #6A737D;
+  --syntax-highlight-keyword: #D73A49;
+  --syntax-highlight-string:  #032F62;
+  --syntax-highlight-number:  #005CC5;
+  --syntax-highlight-title:   #6F42C1;
+  --syntax-highlight-type:    #E36209;
+  --diff-added-text:    #4CAF50;
+  --diff-added-bg:      rgba(76, 175,  80, 0.12);
+  --diff-removed-text:  #F44336;
+  --diff-removed-bg:    rgba(244,  67,  54, 0.12);
+  --diff-hunk-bg:       rgba( 33, 150, 243, 0.08);
+
+  /* Shadows */
+  --shadow-overlay:  var(--surface-overlay);
+  --shadow-dialog:   rgba(0, 0, 0, 0.15);
+  --shadow-card-sm:  0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-card-md:  0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-popover:  0 4px 12px var(--shadow-dialog);
+  --shadow-modal:    0 8px 32px var(--shadow-dialog);
+
+  /* shadcn aliases — what the components actually consume */
+  --radius: 0.5rem;             /* 8px */
+  --background: var(--surface-app);
+  --foreground: var(--text-primary);
+  --card: var(--surface-card);
+  --card-foreground: var(--text-primary);
+  --popover: var(--surface-popover);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--accent-blue);
+  --primary-foreground: var(--text-inverse);
+  --secondary: var(--state-hover);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--state-hover-subtle);
+  --muted-foreground: var(--text-secondary);
+  --accent: var(--state-hover);
+  --accent-foreground: var(--text-primary);
+  --destructive: var(--accent-red);
+  --destructive-foreground: var(--text-inverse);
+  --border: var(--border-default);
+  --input: var(--border-input);
+  --ring: var(--state-focus-ring);
+  --sidebar: var(--surface-sidebar);
+  --sidebar-foreground: var(--text-primary);
+  --sidebar-border: var(--border-default);
+}
+
+/* ------------------------------------------------------------
+   Dark theme — warm-black, brighter blue, same spacing/scale
+   ------------------------------------------------------------ */
+:root.dark,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --surface-app:       #1F1E1B;   /* warm black, NOT pure #000 */
+  --surface-sidebar:   #191814;
+  --surface-panel:     #23221F;
+  --surface-card:      #23221F;
+  --surface-popover:   #292823;
+  --surface-input:     #1F1E1B;
+  --surface-button:    #34322D;
+  --surface-dialog:    #272622;
+  --surface-editor:    #1F1E1B;
+  --surface-overlay:   rgba(8, 8, 7, 0.58);
+
+  --text-primary:   #E6E1D8;
+  --text-secondary: #B8B1A6;
+  --text-tertiary:  #9C9488;
+  --text-muted:     #7F776D;
+  --text-faint:     #625B53;
+  --text-heading:   #F1ECE3;
+  --text-inverse:   #151411;
+
+  --border-default: #34322D;
+  --border-subtle:  #2A2925;
+  --border-strong:  #46433B;
+  --border-input:   #3A3832;
+  --border-dialog:  #3A3832;
+  --border-focus:   #78A4FF;
+
+  --state-hover:           #2D2B27;
+  --state-hover-subtle:    #262520;
+  --state-selected:        #1E344C;
+  --state-selected-strong: #25415F;
+  --state-active:          #203A55;
+  --state-focus-ring:      #78A4FF;
+  --state-drag-target:     rgba(120, 164, 255, 0.20);
+  --state-disabled:        #292824;
+
+  --accent-blue:        #78A4FF;
+  --accent-blue-bg:     rgba(120, 164, 255, 0.20);
+  --accent-blue-hover:  #9BBEFF;
+  --accent-blue-light:  rgba(120, 164, 255, 0.16);
+  --accent-green:       #79D89D;
+  --accent-green-light: rgba(121, 216, 157, 0.16);
+  --accent-orange:      #F3A15B;
+  --accent-orange-light:rgba(243, 161,  91, 0.17);
+  --accent-red:         #FF8A86;
+  --accent-red-light:   rgba(255, 138, 134, 0.16);
+  --accent-purple:      #B69CFF;
+  --accent-purple-light:rgba(182, 156, 255, 0.17);
+  --accent-yellow:      #F2C86B;
+  --accent-yellow-light:rgba(242, 200, 107, 0.18);
+  --accent-teal:        #64D1C8;
+  --accent-teal-light:  rgba(100, 209, 200, 0.16);
+  --accent-pink:        #F28AC3;
+  --accent-pink-light:  rgba(242, 138, 195, 0.16);
+  --accent-gray:        #A7B0BD;
+  --accent-gray-light:  rgba(167, 176, 189, 0.14);
+
+  --shadow-dialog: rgba(0, 0, 0, 0.42);
+}
+
+/* ============================================================
+   Type system — Inter for UI, IBM Plex Mono for code, no
+   serif/display face. Sizes lifted from theme.json + index.css.
+   ============================================================ */
+:root {
+  --font-sans:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+                  Oxygen, Ubuntu, Cantarell, sans-serif;
+  --font-mono:    'IBM Plex Mono', ui-monospace, 'SF Mono', 'Fira Code', monospace;
+  --font-mono-alt:'JetBrains Mono', ui-monospace, monospace;
+
+  /* Base */
+  --fs-base: 14px;          /* app default */
+  --fs-editor: 15px;        /* editor body */
+  --lh-base: 1.5;
+  --fw-regular: 400;
+  --fw-medium:  500;
+  --fw-semibold:600;
+  --fw-bold:    700;
+
+  /* Type scale (px) — t1 largest → t9 smallest */
+  --fs-t1: 32px;  /* h1 */
+  --fs-t2: 27px;  /* h2 */
+  --fs-t3: 20px;  /* h3, h4 */
+  --fs-t4: 16px;
+  --fs-t5: 15px;  /* editor body */
+  --fs-t6: 14px;  /* UI body */
+  --fs-t7: 13px;  /* UI small */
+  --fs-t8: 11px;  /* labels */
+  --fs-t9: 10px;  /* overlines */
+}
+
+/* ------------------------------------------------------------
+   Reset + body — Inter, antialiased, light bg
+   ------------------------------------------------------------ */
+html, body {
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
+  font-weight: var(--fw-regular);
+  color: var(--text-primary);
+  background: var(--surface-app);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-synthesis: none;
+}
+
+/* ------------------------------------------------------------
+   Semantic element styles — match the BlockNote-rendered editor
+   ------------------------------------------------------------ */
+h1, .ds-h1 {
+  font-family: var(--font-sans);
+  font-size: var(--fs-t1);
+  font-weight: var(--fw-bold);
+  line-height: 1.2;
+  letter-spacing: -0.5px;
+  color: var(--text-heading);
+  margin: 32px 0 12px;
+}
+h2, .ds-h2 {
+  font-family: var(--font-sans);
+  font-size: var(--fs-t2);
+  font-weight: var(--fw-semibold);
+  line-height: 1.4;
+  letter-spacing: -0.5px;
+  color: var(--text-heading);
+  margin: 28px 0 10px;
+}
+h3, .ds-h3 {
+  font-family: var(--font-sans);
+  font-size: var(--fs-t3);
+  font-weight: var(--fw-semibold);
+  line-height: 1.4;
+  letter-spacing: -0.5px;
+  color: var(--text-heading);
+  margin: 24px 0 8px;
+}
+h4, .ds-h4 {
+  font-family: var(--font-sans);
+  font-size: var(--fs-t3);
+  font-weight: var(--fw-semibold);
+  line-height: 1.4;
+  color: var(--text-heading);
+  margin: 20px 0 6px;
+}
+p, .ds-body {
+  font-size: var(--fs-t5);
+  line-height: 1.5;
+  color: var(--text-primary);
+  margin: 8px 0;
+}
+small, .ds-small {
+  font-size: var(--fs-t7);
+  color: var(--text-secondary);
+}
+
+a, .ds-link {
+  color: var(--accent-blue);
+  text-decoration: underline;
+}
+a:hover { color: var(--accent-blue-hover); }
+
+code, .ds-code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--state-hover-subtle);
+  border-radius: 3px;
+  padding: 0.15em 0.35em;
+  color: var(--text-secondary);
+}
+pre code {
+  display: block;
+  padding: 0.75em 1em;
+  background: var(--muted);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+}
+
+blockquote, .ds-blockquote {
+  border-left: 3px solid var(--accent-blue);
+  padding-left: 16px;
+  margin: 12px 0;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+hr, .ds-hr {
+  border: none;
+  border-top: 1px solid var(--border-default);
+  margin: 24px 0;
+}
+
+/* ------------------------------------------------------------
+   UI label classes — Inter, sentence case (NEVER ALLCAPS in UI)
+   exception: SIDEBAR GROUP HEADERS like VIEWS / TYPES use 11px
+   medium, slightly tracked.
+   ------------------------------------------------------------ */
+.ds-label {
+  font-family: var(--font-sans);
+  font-size: var(--fs-t8);
+  font-weight: var(--fw-medium);
+  color: var(--text-secondary);
+}
+.ds-overline {
+  font-family: var(--font-sans);
+  font-size: var(--fs-t9);
+  font-weight: var(--fw-regular);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------
+   Editor surface — used by every prose preview
+   ------------------------------------------------------------ */
+.ds-editor {
+  font-family: var(--font-sans);
+  font-size: var(--fs-editor);
+  line-height: 1.5;
+  max-width: 720px;
+  padding: 20px 40px;
+  color: var(--text-primary);
+  background: var(--surface-editor);
+}
+
+/* Wikilink — Tolaria's signature inline reference */
+.ds-wikilink {
+  color: var(--accent-blue);
+  text-decoration: none;
+  border-bottom: 1px dotted currentColor;
+  cursor: pointer;
+}
+
+/* ============================================================
+   Spacing + radius scale (used throughout app)
+   ============================================================ */
+:root {
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-7: 20px;
+  --space-8: 24px;
+  --space-9: 32px;
+  --space-10:40px;
+
+  --radius-xs: 3px;   /* code chip, checkbox */
+  --radius-sm: 4px;   /* nav items */
+  --radius-md: 6px;   /* inputs, command rows */
+  --radius-lg: 8px;   /* popovers, cards */
+  --radius-xl: 12px;  /* command palette */
+  --radius-pill: 9999px;
+}
