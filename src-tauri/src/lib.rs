@@ -1,4 +1,8 @@
+mod app_updater;
 mod calendar;
+mod mcp;
+mod ai_agents;
+mod claude_cli;
 
 use calendar::fetcher::{CalEvent, CalendarSync};
 use serde::{Deserialize, Serialize};
@@ -121,16 +125,62 @@ async fn grades_save(course_id: String, assignments: Vec<AssignmentInput>) -> Re
     Ok(())
 }
 
+// ── MCP commands ────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn mcp_config_snippet() -> Result<String, String> {
+    let data_dir = dirs::data_dir()
+        .ok_or_else(|| "cannot find data directory".to_string())?
+        .join("mizu");
+    mcp::mcp_config_snippet(&data_dir.to_string_lossy())
+}
+
+#[tauri::command]
+fn register_mcp() -> Result<String, String> {
+    let data_dir = dirs::data_dir()
+        .ok_or_else(|| "cannot find data directory".to_string())?
+        .join("mizu");
+    mcp::register_mcp(&data_dir.to_string_lossy())
+}
+
+#[tauri::command]
+fn mcp_status() -> String {
+    let data_dir = dirs::data_dir()
+        .map(|d| d.join("mizu").to_string_lossy().to_string())
+        .unwrap_or_default();
+    match mcp::check_mcp_status(&data_dir) {
+        mcp::McpStatus::Installed => "installed".to_string(),
+        mcp::McpStatus::NotInstalled => "not_installed".to_string(),
+    }
+}
+
+#[tauri::command]
+async fn ai_query(prompt: String, course_id: Option<String>) -> Result<String, String> {
+    // This broadcasts to the UI which then uses the MCP to call Claude/Codex
+    // For now, return a placeholder - the frontend will handle this via WebSocket
+    Ok(format!("Query sent: {}", prompt))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             fetch_calendar,
             get_events,
             sync_calendar,
             grades_load,
-            grades_save
+            grades_save,
+            mcp_config_snippet,
+            register_mcp,
+            mcp_status,
+            ai_query,
+            app_updater::check_for_app_update,
+            app_updater::download_and_install_app_update,
+            ai_agents::get_ai_agents_status,
+            ai_agents::run_ai_agent_stream,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

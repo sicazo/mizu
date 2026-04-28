@@ -1,5 +1,7 @@
 @import './design-system.css';
 
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* ===== Onboarding ===== */
 .ob-shell { height: 100vh; display: flex; overflow: hidden; }
 

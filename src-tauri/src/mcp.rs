@@ -1,14 +1,21 @@
 use serde::Serialize;
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 
 const MCP_SERVER_NAME: &str = "mizu";
+const LEGACY_MCP_SERVER_NAME: &str = "mizu";
 
 #[derive(Debug, Serialize, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum McpStatus {
     Installed,
     NotInstalled,
+}
+pub(crate) fn hidden_command(program: impl AsRef<OsStr>) -> Command {
+    let mut command = Command::new(program);
+    // suppress_windows_console(&mut command);
+    command
 }
 
 pub(crate) fn find_node() -> Result<PathBuf, String> {
@@ -78,22 +85,20 @@ fn node_major_version(version: &str) -> Option<u32> {
         .and_then(|major| major.parse().ok())
 }
 
-
 fn node_lookup_command() -> Command {
     #[cfg(windows)]
-    let mut command = hidden_command('where.exe');
+    let mut command = hidden_command("where.exe");
     #[cfg(not(windows))]
-    let mut command = hidden_command('which');
+    let mut command = hidden_command("which");
 
     command.arg("node");
     command
 }
 
-
-fn fallback_node_path() -> Option<PathBuf>> {
+fn fallback_node_path() -> Option<PathBuf> {
     let mut candidates = vec![
         PathBuf::from("/opt/homebrew/bin/node"),
-        PathBuf::from("/usr/local/bin/node")
+        PathBuf::from("/usr/local/bin/node"),
     ];
 
     #[cfg(windows)]
@@ -101,26 +106,24 @@ fn fallback_node_path() -> Option<PathBuf>> {
         if let Some(program_files) = std::env::var_os("ProgramFiles") {
             candidates.push(PathBuf::from(program_files).join("nodejs").join("node.exe"));
         }
-        if let Some(program_fles_x86) = std::env::var_os("ProgramFiles(x86)") {
+        if let Some(program_files_x86) = std::env::var_os("ProgramFiles(x86)") {
             candidates.push(
                 PathBuf::from(program_files_x86)
-                .join("nodejs")
-                .join("node.exe"),
+                    .join("nodejs")
+                    .join("node.exe"),
             );
-
         }
 
         if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
             candidates.push(
                 PathBuf::from(local_app_data)
-                .join("Programs")
-                .join("nodejs")
-                .join("node.exe")
+                    .join("Programs")
+                    .join("nodejs")
+                    .join("node.exe"),
             );
         }
     }
 
-    
     if let Some(home) = dirs::home_dir() {
         candidates.push(home.join(".volta").join("bin").join(node_binary_name()));
 
@@ -150,7 +153,6 @@ fn node_binary_name() -> &'static str {
     }
 }
 
-
 pub(crate) fn mcp_server_dir() -> Result<PathBuf, String> {
     let dev_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
@@ -160,25 +162,31 @@ pub(crate) fn mcp_server_dir() -> Result<PathBuf, String> {
     let appdir = std::env::var_os("APPDIR").map(PathBuf::from);
     let candidates = mcp_server_dir_candidates(&dev_path, &exe, appdir.as_deref());
 
-    if let Some(path) = candidates.iter().find(|path| mcp_server_dir_has_files(path))
+    if let Some(path) = candidates
+        .iter()
+        .find(|path| mcp_server_dir_has_files(path))
     {
         return Ok(std::fs::canonicalize(path).unwrap_or_else(|_| path.clone()));
     }
 
-
-    let searched = candidates.iter().map(|path| path.display().to_string()).collect::<Vec<_>>().join(", ");
-    Err(format!("mcp-server not found. Searched these paths: {searched}"))
+    let searched = candidates
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    Err(format!(
+        "mcp-server not found. Searched these paths: {searched}"
+    ))
 }
 
 fn mcp_server_dir_candidates(
-    &dev_path: &Path,
+    dev_path: &Path,
     exe_path: &Path,
     appdir: Option<&Path>,
 ) -> Vec<PathBuf> {
-    let mut candidates = vec![dev_path.to_path.buf()];
+    let mut candidates = vec![dev_path.to_path_buf()];
 
-
-    if let Some(exe_dir) = exe.path.parent() {
+    if let Some(exe_dir) = exe_path.parent() {
         candidates.push(exe_dir.join("mcp-server"));
         if let Some(bundle_root) = exe_dir.parent() {
             candidates.push(bundle_root.join("Resources").join("mcp-server"));
@@ -186,27 +194,29 @@ fn mcp_server_dir_candidates(
         }
     }
 
-
     if let Some(appdir) = appdir {
         candidates.push(
-            appdir.join("usr").join("lib").join("mizu").join("mcp-server"),
+            appdir
+                .join("usr")
+                .join("lib")
+                .join("mizu")
+                .join("mcp-server"),
         );
     }
 
     candidates.push(
-        PathBuf::from("/usr").join("lib").join(MCP_SERVER_NAME).join("mcp-server")
+        PathBuf::from("/usr")
+            .join("lib")
+            .join(MCP_SERVER_NAME)
+            .join("mcp-server"),
     );
 
     candidates
-
 }
-
-
 
 fn mcp_server_dir_has_files(path: &Path) -> bool {
     path.join("index.js").is_file() && path.join("ws-bridge.js").is_file()
 }
-
 
 pub fn spawn_ws_bridge(vault_path: impl AsRef<Path>) -> Result<Child, String> {
     let node = find_node()?;
@@ -214,8 +224,16 @@ pub fn spawn_ws_bridge(vault_path: impl AsRef<Path>) -> Result<Child, String> {
     let script = server_dir.join("ws-bridge.js");
     let vault_path = vault_path.as_ref();
 
-    let child = hidden_command(node).arg(&script).env("VAULT_PATH", vault_path).env("WS_PORT", "9710", "WS_UI_PORT", "9711").stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process:Stdio::piped()).spawn().map_err(|e| fomrat!("Failed to spawn ws-bridge: {e}"))?;
-
+    let child = hidden_command(node)
+        .arg(&script)
+        .env("VAULT_PATH", vault_path)
+        .env("WS_PORT", "9710")
+        .env("WS_UI_PORT", "9711")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn ws-bridge: {e}"))?;
 
     log::info!(
         "ws-bridge spawned (pid: {}, vault: {})",
@@ -226,9 +244,10 @@ pub fn spawn_ws_bridge(vault_path: impl AsRef<Path>) -> Result<Child, String> {
     Ok(child)
 }
 
-
 fn mcp_config_paths() -> Vec<PathBuf> {
-    dirs::home_dir().map(|home| mcp_config_paths_for_home(&home)).unwrap_or_default()
+    dirs::home_dir()
+        .map(|home| mcp_config_paths_for_home(&home))
+        .unwrap_or_default()
 }
 
 fn mcp_config_paths_for_home(home: &Path) -> Vec<PathBuf> {
@@ -240,22 +259,28 @@ fn mcp_config_paths_for_home(home: &Path) -> Vec<PathBuf> {
     ]
 }
 
-
-fn read_registered_mcp_entry(config_path: &Path) ->Option<serde_json::Value> {
+fn read_registered_mcp_entry(config_path: &Path) -> Option<serde_json::Value> {
     let raw = std::fs::read_to_string(config_path).ok()?;
     let config: serde_json::Value = serde_json::from_str(&raw).ok()?;
 
-    config.get("mcpServers").and_then(|value| value.as_object()).and_then(|servers| {
-        servers.get(MCP_SERVER_NAME)
-    }).cloned()
+    config
+        .get("mcpServers")
+        .and_then(|value| value.as_object())
+        .and_then(|servers| {
+            servers
+                .get(MCP_SERVER_NAME)
+                .or_else(|| servers.get(LEGACY_MCP_SERVER_NAME))
+        })
+        .cloned()
 }
-
 
 fn entry_index_js_exists(entry: &serde_json::Value) -> bool {
-    entry["args"].as_array().and_then(|args| args.first()).and_then(|value| value.as_str()).is_some_and(|index_js| Path::new(index_js).exists())
+    entry["args"]
+        .as_array()
+        .and_then(|args| args.first())
+        .and_then(|value| value.as_str())
+        .is_some_and(|index_js| Path::new(index_js).exists())
 }
-
-
 
 fn entry_uses_stdio(entry: &serde_json::Value) -> bool {
     entry["type"].as_str() == Some("stdio")

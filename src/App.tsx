@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 import TitleBar from "./components/TitleBar";
+import { UpdateBanner } from "./components/UpdateBanner";
+import { useUpdater } from "./hooks/useUpdater";
 import Sidebar from "./components/Sidebar";
 import NoteList from "./components/NoteList";
 import Editor from "./components/Editor";
@@ -43,6 +45,7 @@ function loadCourses(): Record<string, { code: string; name: string; color: stri
 }
 
 export default function App() {
+  const { status: updateStatus, actions: updateActions } = useUpdater();
   const [setupDone, setSetupDone] = useState(() => !!localStorage.getItem("mizu-setup-complete"));
   const [courses, setCourses] = useState<Record<string, { code: string; name: string; color: string }>>(loadCourses);
   const [events, setEvents] = useState<CalEvent[]>([]);
@@ -130,6 +133,7 @@ export default function App() {
         onToggleSettings={() => setShowSettings((v) => !v)}
         theme={theme}
       />
+      <UpdateBanner status={updateStatus} actions={updateActions} />
       <div className="app-body">
         <Sidebar activeId={activeNav} onSelect={handleNavSelect} courses={courses} />
         {isToday ? (
