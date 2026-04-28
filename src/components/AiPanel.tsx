@@ -1,9 +1,11 @@
-import { useState, useCallback, type FormEvent } from 'react'
+import { useState, useCallback, useEffect, useRef, type FormEvent } from 'react'
 import { useMcpBridge } from '../hooks/useMcpBridge'
 
 interface AiPanelProps {
   onClose: () => void
   courseId?: string
+  initialPrompt?: string | null
+  initialPromptNonce?: number
 }
 
 interface Message {
@@ -13,11 +15,12 @@ interface Message {
   course?: string
 }
 
-export default function AiPanel({ onClose, courseId }: AiPanelProps) {
+export default function AiPanel({ onClose, courseId, initialPrompt, initialPromptNonce }: AiPanelProps) {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const { connected, aiQuery } = useMcpBridge()
+  const lastPromptNonceRef = useRef<number | undefined>(undefined)
 
   const handleSend = useCallback(async (e: FormEvent) => {
     e.preventDefault()
@@ -55,6 +58,15 @@ export default function AiPanel({ onClose, courseId }: AiPanelProps) {
   const handleChip = useCallback((prompt: string) => {
     setInput(prompt)
   }, [])
+
+  useEffect(() => {
+    if (initialPromptNonce == null) return
+    if (initialPromptNonce === lastPromptNonceRef.current) return
+    lastPromptNonceRef.current = initialPromptNonce
+    if (initialPrompt?.trim()) {
+      setInput(initialPrompt.trim())
+    }
+  }, [initialPrompt, initialPromptNonce])
 
   return (
     <section className="ai">

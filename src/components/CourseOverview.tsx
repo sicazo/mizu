@@ -20,11 +20,10 @@ interface Props {
   course: Course;
   courseId: string;
   events: CalEvent[];
-  courses: Record<string, Course>;
   onOpenNotes: () => void;
 }
 
-export default function CourseOverview({ course, courseId, events, courses, onOpenNotes }: Props) {
+export default function CourseOverview({ course, courseId, events, onOpenNotes }: Props) {
   const now = new Date();
 
   const courseEvents = sortByStart(

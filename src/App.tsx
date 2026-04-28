@@ -16,6 +16,7 @@ import CommandPalette from "./components/CommandPalette";
 import SettingsPanel from "./components/SettingsPanel";
 import Onboarding, { type DetectedCourse } from "./components/Onboarding";
 import { type CalEvent } from "./lib/events";
+import { useUiActions } from "./hooks/useUiActions";
 
 export type GradeThresholds = { 1: number; 2: number; 3: number; 4: number; 5: number };
 
@@ -54,6 +55,8 @@ export default function App() {
   const [activeNav, setActiveNav] = useState("today");
   const [courseView, setCourseView] = useState<"overview" | "notes">("overview");
   const [activeNote, setActiveNote] = useState("n14");
+  const [queuedAiPrompt, setQueuedAiPrompt] = useState<string | null>(null);
+  const [queuedAiPromptNonce, setQueuedAiPromptNonce] = useState(0);
 
   function handleNavSelect(id: string) {
     setActiveNav(id);
@@ -63,6 +66,14 @@ export default function App() {
   const [showPalette, setShowPalette] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState("light");
+
+  const {
+    activeView: remoteActiveView,
+    activeCourseId: remoteActiveCourseId,
+    theme: remoteTheme,
+    showAiPanel: remoteShowAiPanel,
+    aiQuery: remoteAiQuery,
+  } = useUiActions();
 
   useEffect(() => {
     if (setupDone) {
@@ -74,6 +85,39 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
     document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
+
+  useEffect(() => {
+    if (remoteTheme === "light" || remoteTheme === "dark") {
+      setTheme(remoteTheme);
+    }
+  }, [remoteTheme]);
+
+  useEffect(() => {
+    if (typeof remoteShowAiPanel === "boolean") {
+      setShowAi(remoteShowAiPanel);
+    }
+  }, [remoteShowAiPanel]);
+
+  useEffect(() => {
+    if (!remoteActiveView) return;
+
+    if (remoteActiveView === "today" || remoteActiveView === "schedule" || remoteActiveView === "grades") {
+      setActiveNav(remoteActiveView);
+      return;
+    }
+
+    if (remoteActiveCourseId && courses[remoteActiveCourseId]) {
+      setActiveNav(remoteActiveCourseId);
+      setCourseView(remoteActiveView === "course_notes" ? "notes" : "overview");
+    }
+  }, [remoteActiveView, remoteActiveCourseId, courses]);
+
+  useEffect(() => {
+    if (!remoteAiQuery) return;
+    setShowAi(true);
+    setQueuedAiPrompt(remoteAiQuery);
+    setQueuedAiPromptNonce((n) => n + 1);
+  }, [remoteAiQuery]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -160,7 +204,6 @@ export default function App() {
               course={course}
               courseId={activeNav}
               events={events}
-              courses={courses}
               onOpenNotes={() => setCourseView("notes")}
             />
           )
@@ -170,7 +213,13 @@ export default function App() {
             <div className="empty-title">Pick a course or view from the sidebar</div>
           </div>
         )}
-        {showAi && !isToday && !isSchedule && !isGrades && !showSettings && <AiPanel onClose={() => setShowAi(false)} />}
+        {showAi && !isToday && !isSchedule && !isGrades && !showSettings && (
+          <AiPanel
+            onClose={() => setShowAi(false)}
+            initialPrompt={queuedAiPrompt}
+            initialPromptNonce={queuedAiPromptNonce}
+          />
+        )}
         {showSettings && (
           <SettingsPanel
             onClose={() => setShowSettings(false)}
