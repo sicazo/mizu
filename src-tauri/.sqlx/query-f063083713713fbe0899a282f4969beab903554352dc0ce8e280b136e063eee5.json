@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT uid, summary, start_time, end_time, location, description, sequence FROM calendar_events",
+  "describe": {
+    "columns": [
+      {
+        "name": "uid",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "summary",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "start_time",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "end_time",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "location",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "description",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "sequence",
+        "ordinal": 6,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "f063083713713fbe0899a282f4969beab903554352dc0ce8e280b136e063eee5"
+}

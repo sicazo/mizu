@@ -1,4 +1,6 @@
 import { useState, useCallback, useEffect, useRef, type FormEvent } from 'react'
+import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import { useMcpBridge } from '../hooks/useMcpBridge'
 
 interface AiPanelProps {
@@ -13,6 +15,12 @@ interface Message {
   role: 'user' | 'assistant'
   content: string
   course?: string
+}
+
+interface AiAgentStreamEvent {
+  kind: 'Init' | 'TextDelta' | 'ThinkingDelta' | 'ToolStart' | 'ToolDone' | 'Error' | 'Done'
+  text?: string
+  message?: string
 }
 
 export default function AiPanel({ onClose, courseId, initialPrompt, initialPromptNonce }: AiPanelProps) {
@@ -31,26 +39,69 @@ export default function AiPanel({ onClose, courseId, initialPrompt, initialPromp
       role: 'user',
       content: input.trim(),
     }
-    setMessages(prev => [...prev, userMessage])
+    const streamId = `assistant-${Date.now()}`
+    setMessages(prev => [...prev, userMessage, { id: streamId, role: 'assistant', content: '', course: courseId }])
     setInput('')
     setIsLoading(true)
 
+    let didReceiveStreamText = false
+    let unlisten: (() => void) | null = null
+
     try {
-      // Call the AI via MCP - the MCP server will handle routing to Claude/Codex
-      await aiQuery(userMessage.content, courseId)
-      
-      // For now, show a placeholder response
-      // TODO: Actually connect to Claude/Codex for real responses
-      const assistantMessage: Message = {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: `Received: "${userMessage.content}"\n\nThis would connect to Claude or Codex for AI assistance about your courses.`,
-        course: courseId,
+      // Keep MCP UI action behavior alive for external tool integrations.
+      try {
+        await aiQuery(userMessage.content, courseId)
+      } catch {
+        // no-op
       }
-      setMessages(prev => [...prev, assistantMessage])
+
+      unlisten = await listen<AiAgentStreamEvent>('ai-agent-stream', (event) => {
+        const payload = event.payload
+        if (payload.kind === 'TextDelta' && payload.text) {
+          didReceiveStreamText = true
+          setMessages(prev => prev.map((msg) => (
+            msg.id === streamId ? { ...msg, content: `${msg.content}${payload.text}` } : msg
+          )))
+        }
+
+        if (payload.kind === 'Error') {
+          const errorText = payload.message || 'AI stream failed.'
+          setMessages(prev => prev.map((msg) => (
+            msg.id === streamId
+              ? { ...msg, content: msg.content ? `${msg.content}\n\n${errorText}` : errorText }
+              : msg
+          )))
+        }
+      })
+
+      await invoke<string>('stream_ai_agent', {
+        request: {
+          agent: 'claude_code',
+          message: userMessage.content,
+          system_prompt: null,
+          vault_path: '.',
+        },
+      })
+
+      if (!didReceiveStreamText) {
+        const response = await invoke<string>('ai_query', {
+          prompt: userMessage.content,
+          courseId,
+          course_id: courseId,
+        })
+        setMessages(prev => prev.map((msg) => (
+          msg.id === streamId ? { ...msg, content: response } : msg
+        )))
+      }
     } catch (err) {
       console.error('AI query failed:', err)
+      setMessages(prev => prev.map((msg) => (
+        msg.id === streamId
+          ? { ...msg, content: 'AI request failed. Make sure Claude Code is installed and the backend is running.' }
+          : msg
+      )))
     } finally {
+      if (unlisten) unlisten()
       setIsLoading(false)
     }
   }, [input, isLoading, courseId, aiQuery])
@@ -124,7 +175,7 @@ export default function AiPanel({ onClose, courseId, initialPrompt, initialPromp
           disabled={isLoading}
         />
         <div className="ai-input-foot">
-          <span className="ai-model">claude · haiku</span>
+          <span className="ai-model">Claude Code</span>
           <button type="submit" className="ai-send" disabled={isLoading || !input.trim()}>
             Send ↵
           </button>

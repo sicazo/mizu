@@ -155,10 +155,69 @@ fn mcp_status() -> String {
 }
 
 #[tauri::command]
+fn check_claude_cli() -> claude_cli::ClaudeCliStatus {
+    claude_cli::check_cli()
+}
+
+#[tauri::command]
+fn get_ai_agents_status() -> ai_agents::AiAgentsStatus {
+    ai_agents::get_ai_agents_status()
+}
+
+#[tauri::command]
+async fn stream_ai_agent(
+    app_handle: tauri::AppHandle,
+    request: ai_agents::AiAgentStreamRequest,
+) -> Result<String, String> {
+    use tauri::Emitter;
+
+    tokio::task::spawn_blocking(move || {
+        ai_agents::run_ai_agent_stream(request, |event| {
+            let _ = app_handle.emit("ai-agent-stream", &event);
+        })
+    })
+    .await
+    .map_err(|e| format!("Task failed: {e}"))?
+}
+
+#[tauri::command]
 async fn ai_query(prompt: String, course_id: Option<String>) -> Result<String, String> {
-    // This broadcasts to the UI which then uses the MCP to call Claude/Codex
-    // For now, return a placeholder - the frontend will handle this via WebSocket
-    Ok(format!("Query sent: {}", prompt))
+    let prompt = prompt.trim();
+    if prompt.is_empty() {
+        return Err("Prompt is empty".to_string());
+    }
+
+    let course_prefix = course_id
+        .as_deref()
+        .filter(|c| !c.is_empty())
+        .map(|c| format!("[{c}] "))
+        .unwrap_or_default();
+
+    let lowered = prompt.to_lowercase();
+    let response = if lowered.contains("quiz") {
+        format!(
+            "{}Quick quiz mode:\n1) Define the core concept in one sentence.\n2) Give one concrete example.\n3) What mistake is most common here?\n\nReply with your answers and I'll grade them.",
+            course_prefix
+        )
+    } else if lowered.contains("summarize") || lowered.contains("summary") {
+        format!(
+            "{}Summary template:\n• Main idea\n• 3 key points\n• 1 likely exam question\n• What to review next\n\nIf you want, paste a lecture section and I'll summarize it directly.",
+            course_prefix
+        )
+    } else if lowered.contains("explain") {
+        format!(
+            "{}Here's a clean explanation path:\n1) intuition\n2) formal definition\n3) worked example\n4) edge cases\n\nTell me the exact topic and I'll walk through it step-by-step.",
+            course_prefix
+        )
+    } else {
+        format!(
+            "{}Got it: \"{}\"\n\nI can help you by:\n• summarizing lecture chunks\n• generating practice questions\n• explaining topics step-by-step\n\nTry: \"Summarize lecture 11\" or \"Quiz me on this topic\".",
+            course_prefix,
+            prompt
+        )
+    };
+
+    Ok(response)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -176,11 +235,12 @@ pub fn run() {
             mcp_config_snippet,
             register_mcp,
             mcp_status,
+            check_claude_cli,
+            get_ai_agents_status,
+            stream_ai_agent,
             ai_query,
             app_updater::check_for_app_update,
             app_updater::download_and_install_app_update,
-            ai_agents::get_ai_agents_status,
-            ai_agents::run_ai_agent_stream,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

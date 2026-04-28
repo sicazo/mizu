@@ -49,7 +49,8 @@ release bump="patch":
     git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml
     git commit -m "chore: release v${next}"
     git tag "v${next}"
-    git push origin master --tags
+    git push origin master
+    git push origin "v${next}"
 
     echo ""
     echo "✓ Tagged v${next} and pushed — CI will build and deploy"

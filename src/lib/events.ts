@@ -45,9 +45,15 @@ export function matchToCourse(
 ): { id: string; course: Course } | null {
   const stripped = stripSummary(summary).toLowerCase();
   for (const [id, course] of Object.entries(courses)) {
+    const name = course.name.toLowerCase();
+    const code = course.code.toLowerCase();
     if (
-      stripped === course.name.toLowerCase() ||
-      stripped === course.code.toLowerCase()
+      stripped === name ||
+      stripped === code ||
+      stripped.includes(name) ||
+      stripped.includes(code) ||
+      name.includes(stripped) ||
+      code.includes(stripped)
     ) {
       return { id, course };
     }

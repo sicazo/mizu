@@ -2,12 +2,9 @@ interface TitleBarProps {
   breadcrumb: string[];
   onTogglePalette: () => void;
   onToggleAi: () => void;
-  onToggleTheme: () => void;
-  onToggleSettings: () => void;
-  theme: string;
 }
 
-export default function TitleBar({ breadcrumb, onTogglePalette, onToggleAi, onToggleTheme, onToggleSettings, theme }: TitleBarProps) {
+export default function TitleBar({ breadcrumb, onTogglePalette, onToggleAi }: TitleBarProps) {
   return (
     <div className="tb">
       <div className="tb-center">
@@ -24,14 +21,8 @@ export default function TitleBar({ breadcrumb, onTogglePalette, onToggleAi, onTo
         <button className="tb-btn" onClick={onTogglePalette} title="Command palette">
           <span className="kbd">⌘K</span>
         </button>
-        <button className="tb-btn" onClick={onToggleTheme} title="Toggle theme">
-          {theme === "dark" ? "☀" : "☾"}
-        </button>
         <button className="tb-btn" onClick={onToggleAi} title="Ask Mizu">
           <span style={{ fontFamily: "'Yu Mincho', 'Hiragino Mincho ProN', serif", fontSize: 14, color: "#155DFF" }}>水</span>
-        </button>
-        <button className="tb-btn" onClick={onToggleSettings} title="Settings">
-          ⚙
         </button>
       </div>
     </div>

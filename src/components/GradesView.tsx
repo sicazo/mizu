@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { type GradeThresholds } from "../App";
+import { type CalEvent, isExamEvent, matchToCourse, courseNameFromSummary } from "../lib/events";
 
 interface Course {
   code: string;
@@ -29,6 +30,7 @@ interface DBAssignment {
 interface GradesViewProps {
   courses: Record<string, Course>;
   thresholds: GradeThresholds;
+  events: CalEvent[];
 }
 
 // ─── Persistence ──────────────────────────────────────────────────────────────
@@ -312,16 +314,50 @@ function Gradebook({
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
-export default function GradesView({ courses, thresholds }: GradesViewProps) {
+export default function GradesView({ courses, thresholds, events }: GradesViewProps) {
   const ids = Object.keys(courses);
   const [selectedId, setSelectedId] = useState<string | null>(ids[0] ?? null);
   const [averages, setAverages] = useState<Record<string, number | null>>({});
+  const [seedVersion, setSeedVersion] = useState(0);
   const course = selectedId ? courses[selectedId] : null;
 
   function handleAvgChange(avg: number | null) {
     if (!selectedId) return;
     setAverages((prev) => ({ ...prev, [selectedId]: avg }));
   }
+
+  // Seed exam events into grade_assignments for all courses whenever events load.
+  useEffect(() => {
+    if (events.length === 0) return;
+    const promises: Promise<void>[] = [];
+    for (const [courseId, c] of Object.entries(courses)) {
+      const examEvs = events.filter(
+        (ev) => isExamEvent(ev.summary) && matchToCourse(ev.summary, { [courseId]: c }) !== null
+      );
+      if (examEvs.length === 0) continue;
+      promises.push(
+        loadAssignments(courseId).then((rows) => {
+          const existingIds = new Set(rows.map((r) => r.id));
+          const fresh = examEvs.filter((ev) => !existingIds.has(`exam-${ev.uid}`));
+          if (fresh.length === 0) return;
+          const merged = [
+            ...rows,
+            ...fresh.map((ev) => ({
+              id: `exam-${ev.uid}`,
+              name: courseNameFromSummary(ev.summary),
+              weight: 100,
+              earned: null,
+              max_score: 100,
+            })),
+          ];
+          return saveAssignments(courseId, merged);
+        })
+      );
+    }
+    if (promises.length > 0) {
+      Promise.all(promises).then(() => setSeedVersion((v) => v + 1)).catch(console.error);
+    }
+  }, [events]);
 
   return (
     <div className="gv-shell">
@@ -334,7 +370,7 @@ export default function GradesView({ courses, thresholds }: GradesViewProps) {
       />
       {course && selectedId ? (
         <Gradebook
-          key={selectedId}
+          key={`${selectedId}-${seedVersion}`}
           courseId={selectedId}
           course={course}
           onAvgChange={handleAvgChange}

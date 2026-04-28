@@ -17,6 +17,7 @@ import SettingsPanel from "./components/SettingsPanel";
 import Onboarding, { type DetectedCourse } from "./components/Onboarding";
 import { type CalEvent } from "./lib/events";
 import { useUiActions } from "./hooks/useUiActions";
+import StatusBar from "./components/StatusBar";
 
 export type GradeThresholds = { 1: number; 2: number; 3: number; 4: number; 5: number };
 
@@ -62,7 +63,7 @@ export default function App() {
     setActiveNav(id);
     if (courses[id]) setCourseView("overview");
   }
-  const [showAi, setShowAi] = useState(true);
+  const [showAi, setShowAi] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [theme, setTheme] = useState("light");
@@ -173,9 +174,6 @@ export default function App() {
         breadcrumb={breadcrumb}
         onTogglePalette={() => setShowPalette(true)}
         onToggleAi={() => setShowAi((v) => !v)}
-        onToggleTheme={() => setTheme((t) => (t === "light" ? "dark" : "light"))}
-        onToggleSettings={() => setShowSettings((v) => !v)}
-        theme={theme}
       />
       <UpdateBanner status={updateStatus} actions={updateActions} />
       <div className="app-body">
@@ -185,7 +183,7 @@ export default function App() {
         ) : isSchedule ? (
           <ScheduleView events={events} courses={courses} />
         ) : isGrades ? (
-          <GradesView courses={courses} thresholds={thresholds} />
+          <GradesView courses={courses} thresholds={thresholds} events={events} />
         ) : course ? (
           courseView === "notes" ? (
             <>
@@ -213,9 +211,10 @@ export default function App() {
             <div className="empty-title">Pick a course or view from the sidebar</div>
           </div>
         )}
-        {showAi && !isToday && !isSchedule && !isGrades && !showSettings && (
+        {showAi && !showSettings && (
           <AiPanel
             onClose={() => setShowAi(false)}
+            courseId={course ? activeNav : undefined}
             initialPrompt={queuedAiPrompt}
             initialPromptNonce={queuedAiPromptNonce}
           />
@@ -229,6 +228,7 @@ export default function App() {
           />
         )}
       </div>
+      <StatusBar onToggleTheme={() => setTheme((t) => (t === "light" ? "dark" : "light"))} onToggleSettings={() => setShowSettings((v) => !v)} />
       {showPalette && <CommandPalette onClose={() => setShowPalette(false)} />}
     </div>
   );
