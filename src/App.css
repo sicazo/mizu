@@ -119,6 +119,16 @@
 .sp-hint { font-size: 12px; color: var(--text-secondary); line-height: 1.6; margin: 0; }
 .sp-danger-btn { background: var(--accent-red-light); color: var(--accent-red); border: 1px solid transparent; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; text-align: left; }
 .sp-danger-btn:hover { background: var(--accent-red); color: #fff; }
+.sp-grade-grid { display: flex; flex-direction: column; gap: 6px; }
+.sp-grade-row { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 8px; }
+.sp-grade-row-muted { opacity: 0.5; }
+.sp-grade-num { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+.sp-grade-label { font-size: 11px; color: var(--text-secondary); }
+.sp-grade-input-wrap { display: flex; align-items: center; gap: 3px; }
+.sp-grade-input { width: 46px; background: var(--surface-input, var(--surface-hover)); border: 1px solid var(--border-default); border-radius: 4px; padding: 3px 6px; font-size: 12px; font-family: var(--font-mono); color: var(--text-primary); text-align: right; }
+.sp-grade-input:focus { outline: none; border-color: var(--accent-blue, #4A90E2); }
+.sp-grade-pct { font-size: 11px; color: var(--text-muted); }
+.sp-grade-auto { font-size: 11px; color: var(--text-muted); font-style: italic; }
 
 :root {
   --mincho: 'Yu Mincho', 'Hiragino Mincho ProN', 'Noto Serif JP', 'Songti SC', serif;
@@ -357,6 +367,52 @@ button { font-family: inherit; font-size: inherit; cursor: pointer; }
 .gv-remove-btn:hover { color: var(--accent-red); background: var(--accent-red-light); }
 .gv-add-btn { background: transparent; border: 1px dashed var(--border-default); border-radius: 6px; padding: 9px 16px; font-size: 13px; color: var(--text-secondary); width: 100%; text-align: left; }
 .gv-add-btn:hover { background: var(--state-hover); border-color: var(--border-strong); color: var(--text-primary); }
+
+/* ===== Course overview ===== */
+.cov { flex: 1; display: flex; flex-direction: column; padding: 32px 40px 48px; overflow-y: auto; min-width: 0; position: relative; }
+.cov-head { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 24px; border-bottom: 1px solid var(--border-default); margin-bottom: 28px; overflow: hidden; }
+.cov-eyebrow { font-size: 11px; font-weight: 500; color: var(--text-secondary); letter-spacing: 0.06em; margin-bottom: 6px; }
+.cov-h1 { font-size: 36px; font-weight: 700; letter-spacing: -0.7px; line-height: 1.1; }
+.cov-code { font-family: var(--font-mono); }
+.cov-name { font-size: 15px; color: var(--text-secondary); margin-top: 6px; }
+.cov-dot-bg { width: 96px; height: 96px; border-radius: 16px; opacity: 0.12; flex: none; }
+
+.cov-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 40px; }
+.cov-col { display: flex; flex-direction: column; }
+
+.cov-section-head { font-size: 11px; font-weight: 500; color: var(--text-secondary); letter-spacing: 0.04em; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-default); }
+.cov-empty { font-size: 13px; color: var(--text-secondary); padding: 12px 0; }
+
+.cov-events { display: flex; flex-direction: column; gap: 8px; }
+.cov-ev { display: flex; gap: 12px; align-items: stretch; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border-default); background: var(--surface-card); }
+.cov-ev-exam { background: color-mix(in oklab, var(--accent-red) 4%, var(--surface-card)); border-color: color-mix(in oklab, var(--accent-red) 15%, var(--border-default)); }
+.cov-ev-bar { width: 3px; border-radius: 2px; flex: none; align-self: stretch; min-height: 20px; }
+.cov-ev-body { flex: 1; min-width: 0; }
+.cov-ev-title { font-size: 14px; font-weight: 500; color: var(--text-primary); }
+.cov-ev-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+.cov-ev-date { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.cov-ev-time { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.cov-ev-sep { color: var(--text-muted); font-size: 11px; }
+.cov-ev-loc { font-size: 12px; color: var(--text-muted); }
+.cov-exam-badge { font-family: var(--font-mono); font-size: 9px; font-weight: 600; letter-spacing: 0.08em; padding: 2px 6px; border-radius: 3px; color: var(--accent-red); background: var(--accent-red-light); align-self: flex-start; flex: none; }
+
+.cov-info-card { background: var(--surface-card); border: 1px solid var(--border-default); border-radius: 8px; overflow: hidden; }
+.cov-info-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border-default); }
+.cov-info-row:last-child { border-bottom: none; }
+.cov-info-label { font-size: 12px; color: var(--text-secondary); }
+.cov-info-value { font-size: 12px; font-weight: 500; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+.cov-notes { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.cov-note-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 6px; cursor: pointer; }
+.cov-note-row:hover { background: var(--state-hover); }
+.cov-note-left { flex: none; }
+.cov-note-lect { font-family: var(--font-mono); font-size: 10px; font-weight: 500; padding: 2px 6px; border-radius: 4px; display: inline-block; }
+.cov-note-lect-plain { background: var(--state-hover-subtle); color: var(--text-muted); }
+.cov-note-title { flex: 1; font-size: 13px; color: var(--text-primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cov-note-date { font-size: 11px; color: var(--text-muted); flex: none; font-variant-numeric: tabular-nums; }
+
+.cov-notes-btn { background: transparent; border: 1px solid var(--border-default); border-radius: 6px; padding: 8px 14px; font-size: 13px; font-weight: 500; text-align: left; width: 100%; }
+.cov-notes-btn:hover { background: var(--state-hover); }
 
 /* ===== AI panel ===== */
 .ai { width: 360px; flex: none; display: flex; flex-direction: column; border-left: 1px solid var(--border-default); background: var(--surface-panel); animation: ai-border-pulse 2s ease-in-out infinite; }

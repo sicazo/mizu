@@ -13,6 +13,7 @@ interface NoteListProps {
   courseColor: string;
   courseCode: string;
   courseName: string;
+  onBack?: () => void;
 }
 
 interface NoteRowProps {
@@ -46,11 +47,14 @@ function NoteRow({ note, active, onClick, color }: NoteRowProps) {
   );
 }
 
-export default function NoteList({ activeId, onSelect, courseColor, courseCode, courseName }: NoteListProps) {
+export default function NoteList({ activeId, onSelect, courseColor, courseCode, courseName, onBack }: NoteListProps) {
   return (
     <section className="nl">
       <div className="nl-header">
         <div className="nl-title-row">
+          {onBack && (
+            <button className="nl-icon-btn" onClick={onBack} title="Back to overview" style={{ marginRight: 2 }}>←</button>
+          )}
           <span className="nl-dot" style={{ background: courseColor }} />
           <div>
             <div className="nl-h" style={{ color: courseColor }}>{courseCode}</div>

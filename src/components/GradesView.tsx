@@ -1,4 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { type GradeThresholds } from "../App";
 
 interface Course {
   code: string;
@@ -11,29 +13,43 @@ interface Assignment {
   name: string;
   weight: number;
   earned: number | null;
-  max: number;
+  max_score: number;
+}
+
+interface DBAssignment {
+  id: string;
+  course_id: string;
+  name: string;
+  weight: number;
+  earned: number | null;
+  max_score: number;
+  sort_order: number;
 }
 
 interface GradesViewProps {
   courses: Record<string, Course>;
+  thresholds: GradeThresholds;
 }
 
 // ─── Persistence ──────────────────────────────────────────────────────────────
 
-function storageKey(courseId: string) {
-  return `mizu-grades-${courseId}`;
-}
-
-function loadAssignments(courseId: string): Assignment[] {
+async function loadAssignments(courseId: string): Promise<Assignment[]> {
   try {
-    return JSON.parse(localStorage.getItem(storageKey(courseId)) || "[]");
+    const rows = await invoke<DBAssignment[]>("grades_load", { courseId });
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      weight: r.weight,
+      earned: r.earned ?? null,
+      max_score: r.max_score,
+    }));
   } catch {
     return [];
   }
 }
 
-function saveAssignments(courseId: string, assignments: Assignment[]) {
-  localStorage.setItem(storageKey(courseId), JSON.stringify(assignments));
+async function saveAssignments(courseId: string, assignments: Assignment[]) {
+  await invoke("grades_save", { courseId, assignments });
 }
 
 function uid() {
@@ -43,7 +59,7 @@ function uid() {
 // ─── Grade math ───────────────────────────────────────────────────────────────
 
 function pct(a: Assignment) {
-  return a.earned == null ? null : (a.earned / a.max) * 100;
+  return a.earned == null ? null : (a.earned / a.max_score) * 100;
 }
 
 function weightedAverage(assignments: Assignment[]): number | null {
@@ -55,17 +71,27 @@ function weightedAverage(assignments: Assignment[]): number | null {
   return sum / totalWeight;
 }
 
-function letterGrade(pct: number): string {
-  if (pct >= 93) return "A";
-  if (pct >= 90) return "A−";
-  if (pct >= 87) return "B+";
-  if (pct >= 83) return "B";
-  if (pct >= 80) return "B−";
-  if (pct >= 77) return "C+";
-  if (pct >= 73) return "C";
-  if (pct >= 70) return "C−";
-  if (pct >= 60) return "D";
-  return "F";
+// European grade scale (German 1–6, 1 = best)
+function europeanGrade(pct: number, thresholds: GradeThresholds): string {
+  if (pct >= thresholds[1]) return "1";
+  if (pct >= thresholds[2]) return "2";
+  if (pct >= thresholds[3]) return "3";
+  if (pct >= thresholds[4]) return "4";
+  if (pct >= thresholds[5]) return "5";
+  return "6";
+}
+
+const GRADE_LABELS: Record<string, string> = {
+  "1": "sehr gut",
+  "2": "gut",
+  "3": "befriedigend",
+  "4": "ausreichend",
+  "5": "mangelhaft",
+  "6": "ungenügend",
+};
+
+function gradeLabel(grade: string): string {
+  return GRADE_LABELS[grade] ?? "";
 }
 
 // ─── Course selector panel ────────────────────────────────────────────────────
@@ -74,10 +100,14 @@ function CoursePicker({
   courses,
   selectedId,
   onSelect,
+  averages,
+  thresholds,
 }: {
   courses: Record<string, Course>;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  averages: Record<string, number | null>;
+  thresholds: GradeThresholds;
 }) {
   const entries = Object.entries(courses);
 
@@ -88,8 +118,7 @@ function CoursePicker({
         <p className="gv-picker-empty">No courses yet — add them in Settings.</p>
       )}
       {entries.map(([id, c]) => {
-        const assignments = loadAssignments(id);
-        const avg = weightedAverage(assignments);
+        const avg = averages[id] ?? null;
         const active = id === selectedId;
         return (
           <div
@@ -102,7 +131,9 @@ function CoursePicker({
             <div className="gv-picker-info">
               <span className="gv-picker-name">{c.name}</span>
               <span className="gv-picker-avg">
-                {avg == null ? "No grades yet" : `${avg.toFixed(1)}% · ${letterGrade(avg)}`}
+                {avg == null
+                  ? "No grades yet"
+                  : `${avg.toFixed(1)}% · Note ${europeanGrade(avg, thresholds)}`}
               </span>
             </div>
           </div>
@@ -114,30 +145,58 @@ function CoursePicker({
 
 // ─── Gradebook ────────────────────────────────────────────────────────────────
 
-function Gradebook({ courseId, course }: { courseId: string; course: Course }) {
-  const [assignments, setAssignments] = useState<Assignment[]>(() => loadAssignments(courseId));
+function Gradebook({
+  courseId,
+  course,
+  onAvgChange,
+  thresholds,
+}: {
+  courseId: string;
+  course: Course;
+  onAvgChange: (avg: number | null) => void;
+  thresholds: GradeThresholds;
+}) {
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
-  const update = useCallback((next: Assignment[]) => {
-    setAssignments(next);
-    saveAssignments(courseId, next);
+  useEffect(() => {
+    loadAssignments(courseId).then((rows) => {
+      setAssignments(rows);
+      setLoaded(true);
+    });
   }, [courseId]);
 
+  const update = useCallback(
+    (next: Assignment[]) => {
+      setAssignments(next);
+      saveAssignments(courseId, next).catch(console.error);
+      onAvgChange(weightedAverage(next));
+    },
+    [courseId, onAvgChange]
+  );
+
+  useEffect(() => {
+    if (loaded) onAvgChange(weightedAverage(assignments));
+  }, [loaded]);
+
   function updateField(id: string, field: keyof Assignment, raw: string) {
-    update(assignments.map((a) => {
-      if (a.id !== id) return a;
-      if (field === "name") return { ...a, name: raw };
-      if (field === "weight") return { ...a, weight: Math.max(0, Number(raw) || 0) };
-      if (field === "max")    return { ...a, max: Math.max(1, Number(raw) || 100) };
-      if (field === "earned") {
-        const v = raw.trim();
-        return { ...a, earned: v === "" ? null : Math.max(0, Number(v) || 0) };
-      }
-      return a;
-    }));
+    update(
+      assignments.map((a) => {
+        if (a.id !== id) return a;
+        if (field === "name") return { ...a, name: raw };
+        if (field === "weight") return { ...a, weight: Math.max(0, Number(raw) || 0) };
+        if (field === "max_score") return { ...a, max_score: Math.max(1, Number(raw) || 100) };
+        if (field === "earned") {
+          const v = raw.trim();
+          return { ...a, earned: v === "" ? null : Math.max(0, Number(v) || 0) };
+        }
+        return a;
+      })
+    );
   }
 
   function addRow() {
-    update([...assignments, { id: uid(), name: "", weight: 10, earned: null, max: 100 }]);
+    update([...assignments, { id: uid(), name: "", weight: 10, earned: null, max_score: 100 }]);
   }
 
   function removeRow(id: string) {
@@ -147,6 +206,7 @@ function Gradebook({ courseId, course }: { courseId: string; course: Course }) {
   const avg = weightedAverage(assignments);
   const totalWeight = assignments.reduce((s, a) => s + a.weight, 0);
   const weightOk = totalWeight === 0 || Math.abs(totalWeight - 100) < 0.1;
+  const grade = avg != null ? europeanGrade(avg, thresholds) : null;
 
   return (
     <div className="gv-book">
@@ -157,17 +217,17 @@ function Gradebook({ courseId, course }: { courseId: string; course: Course }) {
             <span className="gv-dot" style={{ background: course.color }} />
             {course.name}
           </div>
-          {avg != null && (
+          {avg != null && grade != null && (
             <div className="gv-stat-row">
               <div className="gv-stat">
                 <div className="gv-stat-num">
                   {avg.toFixed(1)}<span className="gv-stat-pct">%</span>
                 </div>
-                <div className="gv-stat-lbl">current grade</div>
+                <div className="gv-stat-lbl">current score</div>
               </div>
               <div className="gv-stat">
-                <div className="gv-stat-num">{letterGrade(avg)}</div>
-                <div className="gv-stat-lbl">letter</div>
+                <div className="gv-stat-num">{grade}</div>
+                <div className="gv-stat-lbl">{gradeLabel(grade)}</div>
               </div>
             </div>
           )}
@@ -223,15 +283,19 @@ function Gradebook({ courseId, course }: { courseId: string; course: Course }) {
                     className="gv-input gv-input-num"
                     type="number"
                     min={1}
-                    value={a.max}
-                    onChange={(e) => updateField(a.id, "max", e.target.value)}
+                    value={a.max_score}
+                    onChange={(e) => updateField(a.id, "max_score", e.target.value)}
                   />
                   <span className="gv-pct">
-                    {p == null
-                      ? <span className="gv-pct-empty">—</span>
-                      : `${p.toFixed(1)}%`}
+                    {p == null ? (
+                      <span className="gv-pct-empty">—</span>
+                    ) : (
+                      `${p.toFixed(1)}%`
+                    )}
                   </span>
-                  <button className="gv-remove-btn" onClick={() => removeRow(a.id)} title="Remove">×</button>
+                  <button className="gv-remove-btn" onClick={() => removeRow(a.id)} title="Remove">
+                    ×
+                  </button>
                 </div>
               );
             })}
@@ -248,16 +312,34 @@ function Gradebook({ courseId, course }: { courseId: string; course: Course }) {
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
-export default function GradesView({ courses }: GradesViewProps) {
+export default function GradesView({ courses, thresholds }: GradesViewProps) {
   const ids = Object.keys(courses);
   const [selectedId, setSelectedId] = useState<string | null>(ids[0] ?? null);
+  const [averages, setAverages] = useState<Record<string, number | null>>({});
   const course = selectedId ? courses[selectedId] : null;
+
+  function handleAvgChange(avg: number | null) {
+    if (!selectedId) return;
+    setAverages((prev) => ({ ...prev, [selectedId]: avg }));
+  }
 
   return (
     <div className="gv-shell">
-      <CoursePicker courses={courses} selectedId={selectedId} onSelect={setSelectedId} />
+      <CoursePicker
+        courses={courses}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+        averages={averages}
+        thresholds={thresholds}
+      />
       {course && selectedId ? (
-        <Gradebook key={selectedId} courseId={selectedId} course={course} />
+        <Gradebook
+          key={selectedId}
+          courseId={selectedId}
+          course={course}
+          onAvgChange={handleAvgChange}
+          thresholds={thresholds}
+        />
       ) : (
         <div className="empty-pane">
           <div className="empty-mark">水</div>

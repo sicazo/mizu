@@ -1,6 +1,18 @@
 mod calendar;
 
 use calendar::fetcher::{CalEvent, CalendarSync};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+struct Assignment {
+    id: String,
+    course_id: String,
+    name: String,
+    weight: f64,
+    earned: Option<f64>,
+    max_score: f64,
+    sort_order: i64,
+}
 
 fn app_db_url() -> Result<String, String> {
     let data_dir = dirs::data_dir()
@@ -45,11 +57,81 @@ async fn sync_calendar() -> Result<Vec<CalEvent>, String> {
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+async fn grades_load(course_id: String) -> Result<Vec<Assignment>, String> {
+    let pool = sqlx::SqlitePool::connect(&app_db_url()?)
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    let rows = sqlx::query_as::<_, Assignment>(
+        "SELECT id, course_id, name, weight, earned, max_score, sort_order
+         FROM grade_assignments WHERE course_id = ? ORDER BY sort_order",
+    )
+    .bind(&course_id)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+#[derive(Deserialize)]
+struct AssignmentInput {
+    id: String,
+    name: String,
+    weight: f64,
+    earned: Option<f64>,
+    max_score: f64,
+}
+
+#[tauri::command]
+async fn grades_save(course_id: String, assignments: Vec<AssignmentInput>) -> Result<(), String> {
+    let pool = sqlx::SqlitePool::connect(&app_db_url()?)
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    sqlx::query("DELETE FROM grade_assignments WHERE course_id = ?")
+        .bind(&course_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    for (i, a) in assignments.iter().enumerate() {
+        sqlx::query(
+            "INSERT INTO grade_assignments (id, course_id, name, weight, earned, max_score, sort_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&a.id)
+        .bind(&course_id)
+        .bind(&a.name)
+        .bind(a.weight)
+        .bind(a.earned)
+        .bind(a.max_score)
+        .bind(i as i64)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![fetch_calendar, get_events, sync_calendar])
+        .invoke_handler(tauri::generate_handler![
+            fetch_calendar,
+            get_events,
+            sync_calendar,
+            grades_load,
+            grades_save
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
