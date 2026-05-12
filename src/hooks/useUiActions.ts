@@ -24,11 +24,19 @@ export interface LearnCardCreate {
   back: string
 }
 
+function loadInitialTheme(): 'light' | 'dark' {
+  try {
+    return localStorage.getItem('mizu-theme') === 'light' ? 'light' : 'dark'
+  } catch {
+    return 'dark'
+  }
+}
+
 const initialState: UiState = {
   activeView: 'today',
   activeCourseId: null,
-  theme: 'light',
-  showAiPanel: true,
+  theme: loadInitialTheme(),
+  showAiPanel: false,
   aiQuery: null,
 }
 

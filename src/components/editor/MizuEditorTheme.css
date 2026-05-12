@@ -1,0 +1,278 @@
+/* Editor-specific tokens that map Mizu's design system to BlockNote's needs */
+:root,
+[data-theme="light"] {
+  --mizu-editor-font-family: var(--font-sans, "Inter", system-ui, sans-serif);
+  --mizu-editor-font-size: 15px;
+  --mizu-editor-line-height: 1.65;
+  --mizu-editor-max-width: 720px;
+  --mizu-editor-padding-v: 32px;
+  --mizu-editor-padding-h: 40px;
+  --mizu-editor-text: var(--text-primary);
+  --mizu-editor-cursor: var(--accent-blue);
+  --mizu-editor-selection: var(--state-selected);
+  --mizu-editor-border: var(--border-default);
+
+  --mizu-code-bg: var(--surface-sidebar, #F7F6F3);
+  --mizu-code-border: var(--border-default);
+  --mizu-code-text: var(--text-primary);
+  --mizu-code-lang: var(--text-secondary);
+}
+
+[data-theme="dark"],
+.dark {
+  --mizu-code-bg: #1e1e1e;
+  --mizu-code-border: var(--border-default);
+  --mizu-code-text: var(--text-primary);
+  --mizu-code-lang: var(--text-secondary);
+}
+
+/* --- Container --- */
+.mizu-editor__container {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mizu-editor__container .bn-editor {
+  font-family: var(--mizu-editor-font-family);
+  font-size: var(--mizu-editor-font-size);
+  line-height: var(--mizu-editor-line-height);
+  max-width: var(--mizu-editor-max-width);
+  margin: 0 auto;
+  padding: var(--mizu-editor-padding-v) var(--mizu-editor-padding-h) 80px;
+  color: var(--mizu-editor-text);
+  caret-color: var(--mizu-editor-cursor);
+}
+
+.mizu-editor__container .bn-inline-content {
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+
+.mizu-editor__container .bn-block-outer {
+  line-height: var(--mizu-editor-line-height) !important;
+}
+
+.mizu-editor__container .bn-editor ::selection {
+  background: var(--mizu-editor-selection);
+}
+
+/* --- Side menu layout --- */
+.mizu-editor__container .bn-side-menu {
+  --group-wrap: nowrap !important;
+  align-items: center !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  gap: 0 !important;
+}
+
+.mizu-editor__container .bn-block-content {
+  margin-left: 8px;
+}
+
+/* --- Toolbar icon sizes --- */
+.mizu-editor__container :is(.bn-toolbar, .bn-formatting-toolbar, .bn-menu-dropdown, .bn-grid-suggestion-menu) button svg {
+  width: 16px !important;
+  height: 16px !important;
+  flex-shrink: 0;
+}
+
+/* --- Paragraph spacing --- */
+.mizu-editor__container .bn-block-content[data-content-type="paragraph"] {
+  margin-bottom: 4px;
+}
+
+/* --- Headings --- */
+.mizu-editor__container .bn-block-outer:has(h1) {
+  margin-top: 4px !important;
+  margin-bottom: 4px !important;
+  padding-bottom: 16px !important;
+  border-bottom: 1px solid var(--mizu-editor-border);
+}
+
+.mizu-editor__container [data-content-type="heading"]:not([data-level]) .bn-inline-content,
+.mizu-editor__container [data-content-type="heading"][data-level="1"] .bn-inline-content {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.4px;
+}
+
+.mizu-editor__container .bn-block-outer:has(> .bn-block > [data-content-type="heading"][data-level="2"]) {
+  margin-top: 20px !important;
+  margin-bottom: 4px !important;
+}
+
+.mizu-editor__container [data-content-type="heading"][data-level="2"] .bn-inline-content {
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.3px;
+}
+
+.mizu-editor__container .bn-block-outer:has(> .bn-block > [data-content-type="heading"][data-level="3"]) {
+  margin-top: 16px !important;
+  margin-bottom: 4px !important;
+}
+
+.mizu-editor__container [data-content-type="heading"][data-level="3"] .bn-inline-content {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* --- Lists --- */
+.mizu-editor__container [data-content-type="bulletListItem"],
+.mizu-editor__container [data-content-type="numberedListItem"] {
+  padding-left: 4px;
+  margin-bottom: 2px;
+  gap: 6px !important;
+}
+
+.mizu-editor__container .bn-block-group .bn-block-group {
+  margin-left: 20px;
+}
+
+.mizu-editor__container .bn-block-group .bn-block-group .bn-block-outer::before {
+  border-left: none !important;
+}
+
+/* --- Inline styles --- */
+.mizu-editor__container .bn-editor strong {
+  font-weight: 600;
+}
+
+.mizu-editor__container .bn-editor em {
+  font-style: italic;
+}
+
+.mizu-editor__container .bn-editor a {
+  color: var(--accent-blue);
+  text-decoration: underline;
+  cursor: text;
+}
+
+.mizu-editor__container .bn-inline-content code {
+  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  font-size: 0.875em;
+  background-color: var(--state-hover-subtle);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+  color: var(--text-secondary);
+}
+
+/* --- Math --- */
+.mizu-editor__container .math {
+  color: var(--mizu-editor-text);
+  cursor: text;
+}
+
+.mizu-editor__container .math--inline {
+  display: inline-flex;
+  max-width: 100%;
+  vertical-align: -0.15em;
+}
+
+.mizu-editor__container .math-block-shell {
+  width: 100%;
+  overflow-x: auto;
+  padding: 6px 0;
+}
+
+.mizu-editor__container .math--block {
+  display: block;
+  min-width: max-content;
+  text-align: center;
+}
+
+/* --- Blockquote --- */
+.mizu-editor__container [data-content-type="blockquote"],
+.mizu-editor__container blockquote {
+  border-left: 3px solid var(--border-strong);
+  padding-left: 14px;
+  margin: 8px 0;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* --- Code blocks --- */
+.mizu-editor__container .bn-block-content[data-content-type="codeBlock"] {
+  background-color: var(--mizu-code-bg) !important;
+  border: 1px solid var(--mizu-code-border);
+  color: var(--mizu-code-text) !important;
+  column-gap: 12px;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  overflow-x: hidden;
+  position: relative;
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+
+.mizu-editor__container .bn-block-content[data-content-type="codeBlock"] > pre {
+  color: inherit;
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  overflow-x: hidden;
+  white-space: pre-wrap;
+}
+
+.mizu-editor__container .bn-block-content[data-content-type="codeBlock"] > div {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+
+.mizu-editor__container .bn-block-content[data-content-type="codeBlock"] > div > select {
+  color: var(--mizu-code-lang) !important;
+}
+
+.mizu-editor__container .bn-block-content[data-content-type="codeBlock"] pre code {
+  background-color: transparent;
+  border-radius: 0;
+  color: inherit;
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 0;
+  white-space: pre-wrap;
+}
+
+.mizu-editor__container .bn-block-content[data-content-type="codeBlock"] pre code .shiki {
+  background-color: transparent !important;
+  color: inherit !important;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap !important;
+}
+
+/* --- Popover / menu z-index --- */
+.mizu-editor__container .mantine-Popover-dropdown,
+.mizu-editor__container .bn-menu,
+.mizu-editor__container .bn-suggestion-menu {
+  z-index: 1000 !important;
+}
+
+/* --- Table --- */
+.mizu-editor__container [data-content-type="table"] table {
+  border-color: var(--border-default);
+  font-size: var(--mizu-editor-font-size);
+}
+
+.mizu-editor__container [data-content-type="table"] th {
+  background: var(--surface-sidebar);
+  padding: 6px 12px;
+}
+
+.mizu-editor__container [data-content-type="table"] td {
+  padding: 6px 12px;
+  border-color: var(--border-default);
+}
+
+/* --- HR --- */
+.mizu-editor__container hr {
+  border: none;
+  border-top: 1px solid var(--border-default);
+  margin: 16px 0;
+}

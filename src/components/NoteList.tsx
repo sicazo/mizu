@@ -1,29 +1,28 @@
-const COURSE_NOTES = [
-  { id: "n14", title: "Eigenvalues · intuition",  lecture: 14,   date: "Wed 11 Mar", preview: "An eigenvector is a vector that doesn't change direction when a transformation is applied — only its length changes by a scalar λ.", tags: ["lecture"] },
-  { id: "n13", title: "Basis changes",             lecture: 13,   date: "Mon 9 Mar",  preview: "Switching coordinate systems via change-of-basis matrices. Inverse of the basis matrix recovers the original.", tags: ["lecture"] },
-  { id: "n12", title: "Determinants — geometric",  lecture: 12,   date: "Fri 6 Mar",  preview: "The determinant as the signed scaling factor of n-dimensional volume under the transformation.", tags: ["lecture"] },
-  { id: "n11", title: "Cofactor expansion",        lecture: 11,   date: "Wed 4 Mar",  preview: "Recursive method for computing determinants by expanding along a row or column.", tags: ["lecture"] },
-  { id: "ps",  title: "Problem set 5 · scratch",  lecture: null, date: "Tue 10 Mar", preview: "Working through Q3 — the diagonalizable matrix needs eigenvectors that span the space.", tags: ["scratch"] },
-  { id: "study", title: "Midterm review notes",   lecture: null, date: "1w ago",      preview: "Compiled from lectures 1–10. Strong on row reduction, weaker on inner products.", tags: ["study"] },
-];
+import type { ApiNoteSummary } from "../lib/notesApi";
 
 interface NoteListProps {
-  activeId: string;
+  notes: ApiNoteSummary[];
+  activeId: string | null;
   onSelect: (id: string) => void;
+  onCreateNote?: () => void;
+  onTogglePin?: (note: ApiNoteSummary) => void;
   courseColor: string;
   courseCode: string;
   courseName: string;
   onBack?: () => void;
+  showCourseTag?: boolean;
 }
 
 interface NoteRowProps {
-  note: typeof COURSE_NOTES[0];
+  note: ApiNoteSummary;
   active: boolean;
   onClick: () => void;
+  onTogglePin?: () => void;
   color: string;
+  showCourseTag?: boolean;
 }
 
-function NoteRow({ note, active, onClick, color }: NoteRowProps) {
+function NoteRow({ note, active, onClick, onTogglePin, color, showCourseTag }: NoteRowProps) {
   return (
     <div
       className="nl-row"
@@ -31,23 +30,38 @@ function NoteRow({ note, active, onClick, color }: NoteRowProps) {
       style={active ? { background: `${color}14`, borderColor: `${color}30` } : undefined}
     >
       <div className="nl-row-top">
-        <span className="nl-title">{note.title}</span>
-        <span className="nl-date">{note.date}</span>
-      </div>
-      <div className="nl-preview">{note.preview}</div>
-      <div className="nl-tags">
-        {note.lecture != null && (
-          <span className="nl-tag" style={{ background: `${color}1A`, color }}>L{note.lecture}</span>
+        <span className="nl-title">{note.title || "Untitled note"}</span>
+        {onTogglePin && (
+          <button
+            className="nl-pin-btn"
+            title={note.pinned ? "Unpin note" : "Pin note"}
+            onClick={(e) => { e.stopPropagation(); onTogglePin(); }}
+          >
+            {note.pinned ? "★" : "☆"}
+          </button>
         )}
-        {note.tags.map((t) => (
-          <span key={t} className="nl-tag nl-tag-plain">{t}</span>
-        ))}
+        <span className="nl-date">
+          {note.lectureDate
+            ? new Date(note.lectureDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+            : note.modifiedAt
+              ? new Date(note.modifiedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+              : ""}
+        </span>
+      </div>
+      <div className="nl-preview">{note.preview || <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>Empty note</span>}</div>
+      <div className="nl-tags">
+        {showCourseTag && (
+          <span className="nl-tag" style={{ background: "#6B728014", color: "#6B7280" }}>{note.courseId}</span>
+        )}
+        {note.lectureNum != null && (
+          <span className="nl-tag" style={{ background: `${color}1A`, color }}>L{note.lectureNum}</span>
+        )}
       </div>
     </div>
   );
 }
 
-export default function NoteList({ activeId, onSelect, courseColor, courseCode, courseName, onBack }: NoteListProps) {
+export default function NoteList({ notes, activeId, onSelect, onCreateNote, onTogglePin, courseColor, courseCode, courseName, onBack, showCourseTag }: NoteListProps) {
   return (
     <section className="nl">
       <div className="nl-header">
@@ -60,27 +74,37 @@ export default function NoteList({ activeId, onSelect, courseColor, courseCode, 
             <div className="nl-h" style={{ color: courseColor }}>{courseCode}</div>
             <div className="nl-sub">{courseName}</div>
           </div>
-          <span className="nl-count">{COURSE_NOTES.length}</span>
+          <span className="nl-count">{notes.length}</span>
         </div>
         <div className="nl-search-row">
           <span className="nl-search-icon">⌕</span>
           <input className="nl-search" placeholder="Search lectures…" />
         </div>
         <div className="nl-sort-row">
-          <span>Lecture ↓</span>
-          <button className="nl-icon-btn" title="Filter">▾</button>
+          <span>Recent ↓</span>
+          {onCreateNote && (
+            <button className="nl-icon-btn" title="New note" onClick={onCreateNote}>+</button>
+          )}
         </div>
       </div>
       <div className="nl-rows">
-        {COURSE_NOTES.map((n) => (
-          <NoteRow
-            key={n.id}
-            note={n}
-            active={n.id === activeId}
-            onClick={() => onSelect(n.id)}
-            color={courseColor}
-          />
-        ))}
+        {notes.length === 0 ? (
+          <div style={{ padding: "24px 16px", textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
+            No notes yet. Click + to create one.
+          </div>
+        ) : (
+          notes.map((n) => (
+            <NoteRow
+              key={n.id}
+              note={n}
+              active={n.id === activeId}
+              onClick={() => onSelect(n.id)}
+              onTogglePin={onTogglePin ? () => onTogglePin(n) : undefined}
+              color={courseColor}
+              showCourseTag={showCourseTag}
+            />
+          ))
+        )}
       </div>
     </section>
   );

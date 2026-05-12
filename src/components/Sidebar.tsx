@@ -36,9 +36,11 @@ interface SidebarProps {
   activeId: string;
   onSelect: (id: string) => void;
   courses: Record<string, { code: string; name: string; color: string }>;
+  allNotesCount?: number;
+  pinnedCount?: number;
 }
 
-export default function Sidebar({ activeId, onSelect, courses }: SidebarProps) {
+export default function Sidebar({ activeId, onSelect, courses, allNotesCount = 0, pinnedCount = 0 }: SidebarProps) {
   const courseEntries = Object.entries(courses);
 
   return (
@@ -75,12 +77,12 @@ export default function Sidebar({ activeId, onSelect, courses }: SidebarProps) {
 
       <div className="sb-section">
         <div className="sb-group-header"><span>VAULT</span></div>
-        <NavRow icon="◯" label="All notes" count={0}  active={activeId === "all"}      onClick={() => onSelect("all")} />
-        <NavRow icon="✦" label="Pinned"    count={0}  active={activeId === "pinned"}   onClick={() => onSelect("pinned")} />
+        <NavRow icon="◯" label="All notes" count={allNotesCount}  active={activeId === "all"}      onClick={() => onSelect("all")} />
+        <NavRow icon="✦" label="Pinned"    count={pinnedCount}  active={activeId === "pinned"}   onClick={() => onSelect("pinned")} />
         <NavRow icon="▦" label="Concepts"  count={0}  active={activeId === "concepts"} onClick={() => onSelect("concepts")} />
       </div>
 
-      <div className="sb-foot">Synced · just now</div>
+      <div className="sb-foot" />
     </aside>
   );
 }

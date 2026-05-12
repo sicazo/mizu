@@ -8,6 +8,8 @@ use std::process::{Command, Stdio};
 pub enum AiAgentId {
     ClaudeCode,
     Codex,
+    Pi,
+    Gemini,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -20,6 +22,8 @@ pub struct AiAgentAvailability {
 pub struct AiAgentsStatus {
     pub claude_code: AiAgentAvailability,
     pub codex: AiAgentAvailability,
+    pub pi: AiAgentAvailability,
+    pub gemini: AiAgentAvailability,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -63,6 +67,8 @@ pub fn get_ai_agents_status() -> AiAgentsStatus {
     AiAgentsStatus {
         claude_code: availability_from_claude(),
         codex: availability_from_codex(),
+        pi: crate::pi_discovery::check_cli(),
+        gemini: crate::gemini_discovery::check_cli(),
     }
 }
 
@@ -84,6 +90,8 @@ where
             })
         }
         AiAgentId::Codex => run_codex_agent_stream(request, emit),
+        AiAgentId::Pi => run_pi_agent_stream(request, emit),
+        AiAgentId::Gemini => run_gemini_agent_stream(request, emit),
     }
 }
 
@@ -105,7 +113,6 @@ fn availability_from_codex() -> AiAgentAvailability {
             }
         }
     };
-
     AiAgentAvailability {
         installed: true,
         version: version_for_binary(&binary),
@@ -121,19 +128,18 @@ fn version_for_binary(binary: &PathBuf) -> Option<String> {
         .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
+// ── Codex ──────────────────────────────────────────────────────────────────
+
 fn find_codex_binary() -> Result<PathBuf, String> {
     if let Some(binary) = find_codex_binary_on_path() {
         return Ok(binary);
     }
-
     if let Some(binary) = find_codex_binary_in_user_shell() {
         return Ok(binary);
     }
-
     if let Some(binary) = find_existing_binary(codex_binary_candidates()) {
         return Ok(binary);
     }
-
     Err("Codex CLI not found. Install it: https://developers.openai.com/codex/cli".into())
 }
 
@@ -222,110 +228,52 @@ where
     F: FnMut(AiAgentStreamEvent),
 {
     let binary = find_codex_binary()?;
-    let args = build_codex_args(&request)?;
-    let prompt = build_codex_prompt(&request);
+    let prompt = build_prompt(&request.message, request.system_prompt.as_deref());
 
     let mut command = Command::new(binary);
     command
-        .args(args)
+        .args(["exec", "--json", "-C", &request.vault_path])
         .arg(prompt)
         .current_dir(&request.vault_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    let mut child = command
-        .spawn()
-        .map_err(|error| format!("Failed to spawn codex: {error}"))?;
-
+    let mut child = command.spawn().map_err(|e| format!("Failed to spawn codex: {e}"))?;
     let stdout = child.stdout.take().ok_or("No stdout handle")?;
     let reader = std::io::BufReader::new(stdout);
-
-    let mut thread_id = String::new();
+    let mut session_id = String::new();
 
     for line in reader.lines() {
         let line = match line {
             Ok(line) => line,
-            Err(error) => {
-                emit(AiAgentStreamEvent::Error {
-                    message: format!("Read error: {error}"),
-                });
+            Err(e) => {
+                emit(AiAgentStreamEvent::Error { message: format!("Read error: {e}") });
                 break;
             }
         };
-
         if line.trim().is_empty() {
             continue;
         }
-
-        let json = match serde_json::from_str::<serde_json::Value>(&line) {
-            Ok(json) => json,
-            Err(_) => continue,
+        let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) else {
+            continue;
         };
-
         if let Some(id) = json["thread_id"].as_str() {
-            thread_id = id.to_string();
+            session_id = id.to_string();
         }
-
         dispatch_codex_event(&json, &mut emit);
     }
 
-    let stderr_output = child
-        .stderr
-        .take()
+    let stderr_output = child.stderr.take()
         .and_then(|stderr| std::io::read_to_string(stderr).ok())
         .unwrap_or_default();
-
-    let status = child
-        .wait()
-        .map_err(|error| format!("Wait failed: {error}"))?;
+    let status = child.wait().map_err(|e| format!("Wait failed: {e}"))?;
     if !status.success() {
         emit(AiAgentStreamEvent::Error {
             message: format_codex_error(stderr_output, status.to_string()),
         });
     }
-
     emit(AiAgentStreamEvent::Done);
-
-    Ok(thread_id)
-}
-
-fn build_codex_args(request: &AiAgentStreamRequest) -> Result<Vec<String>, String> {
-    let mcp_server = crate::mcp::mcp_server_dir()?.join("index.js");
-    let mcp_server_path = mcp_server
-        .to_str()
-        .ok_or("Invalid MCP server path")?
-        .to_string();
-
-    Ok(vec![
-        "exec".into(),
-        "--json".into(),
-        "-C".into(),
-        request.vault_path.clone(),
-        "-c".into(),
-        r#"mcp_servers.tolaria.command="node""#.into(),
-        "-c".into(),
-        format!(r#"mcp_servers.tolaria.args=["{}"]"#, mcp_server_path),
-        "-c".into(),
-        format!(
-            r#"mcp_servers.tolaria.env={{VAULT_PATH="{}"}}"#,
-            request.vault_path
-        ),
-    ])
-}
-
-fn build_codex_prompt(request: &AiAgentStreamRequest) -> String {
-    match request
-        .system_prompt
-        .as_ref()
-        .map(|prompt| prompt.trim())
-        .filter(|prompt| !prompt.is_empty())
-    {
-        Some(system_prompt) => format!(
-            "System instructions:\n{system_prompt}\n\nUser request:\n{}",
-            request.message
-        ),
-        None => request.message.clone(),
-    }
+    Ok(session_id)
 }
 
 fn dispatch_codex_event<F>(json: &serde_json::Value, emit: &mut F)
@@ -334,10 +282,8 @@ where
 {
     match json["type"].as_str().unwrap_or_default() {
         "thread.started" => {
-            if let Some(thread_id) = json["thread_id"].as_str() {
-                emit(AiAgentStreamEvent::Init {
-                    session_id: thread_id.to_string(),
-                });
+            if let Some(id) = json["thread_id"].as_str() {
+                emit(AiAgentStreamEvent::Init { session_id: id.to_string() });
             }
         }
         "item.started" => emit_codex_item_event(json, false, emit),
@@ -359,25 +305,20 @@ where
             if completed {
                 emit(AiAgentStreamEvent::ToolDone {
                     tool_id: item_id.to_string(),
-                    output: item["aggregated_output"]
-                        .as_str()
-                        .map(|output| output.to_string()),
+                    output: item["aggregated_output"].as_str().map(str::to_string),
                 });
             } else {
                 emit(AiAgentStreamEvent::ToolStart {
                     tool_name: "Bash".into(),
                     tool_id: item_id.to_string(),
-                    input: item["command"]
-                        .as_str()
-                        .map(|command| serde_json::json!({ "command": command }).to_string()),
+                    input: item["command"].as_str()
+                        .map(|cmd| serde_json::json!({ "command": cmd }).to_string()),
                 });
             }
         }
         "agent_message" if completed => {
             if let Some(text) = item["text"].as_str() {
-                emit(AiAgentStreamEvent::TextDelta {
-                    text: text.to_string(),
-                });
+                emit(AiAgentStreamEvent::TextDelta { text: text.to_string() });
             }
         }
         _ => {}
@@ -386,21 +327,246 @@ where
 
 fn format_codex_error(stderr_output: String, status: String) -> String {
     let lower = stderr_output.to_ascii_lowercase();
-    if is_codex_auth_error(&lower) {
-        return "Codex CLI is not authenticated. Run `codex login` or launch `codex` in your terminal.".into();
+    if ["auth", "login", "sign in"].iter().any(|p| lower.contains(p)) {
+        return "Codex CLI is not authenticated. Run `codex login` in your terminal.".into();
+    }
+    if stderr_output.trim().is_empty() {
+        return format!("codex exited with status {status}");
+    }
+    stderr_output.lines().take(3).collect::<Vec<_>>().join("\n")
+}
+
+// ── Pi ────────────────────────────────────────────────────────────────────
+
+fn run_pi_agent_stream<F>(request: AiAgentStreamRequest, mut emit: F) -> Result<String, String>
+where
+    F: FnMut(AiAgentStreamEvent),
+{
+    let binary = crate::pi_discovery::find_binary()?;
+    let prompt = build_prompt(&request.message, request.system_prompt.as_deref());
+
+    let mut command = Command::new(&binary);
+    command
+        .args(["--mode", "json", "--no-session"])
+        .arg(&prompt)
+        .current_dir(&request.vault_path)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let mut child = command.spawn().map_err(|e| format!("Failed to spawn pi: {e}"))?;
+    let stdout = child.stdout.take().ok_or("No stdout handle")?;
+    let reader = std::io::BufReader::new(stdout);
+    let mut session_id = String::new();
+
+    for line in reader.lines() {
+        let line = match line {
+            Ok(line) => line,
+            Err(e) => {
+                emit(AiAgentStreamEvent::Error { message: format!("Read error: {e}") });
+                break;
+            }
+        };
+        if line.trim().is_empty() {
+            continue;
+        }
+        let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) else {
+            continue;
+        };
+        // Pi session id from {"type":"session","id":"..."}
+        if json["type"].as_str() == Some("session") {
+            if let Some(id) = json["id"].as_str().or_else(|| json["session_id"].as_str()) {
+                session_id = id.to_string();
+                emit(AiAgentStreamEvent::Init { session_id: session_id.clone() });
+            }
+        }
+        dispatch_pi_event(&json, &mut emit);
     }
 
-    if stderr_output.trim().is_empty() {
-        format!("codex exited with status {status}")
-    } else {
-        stderr_output.lines().take(3).collect::<Vec<_>>().join("\n")
+    let stderr_output = child.stderr.take()
+        .and_then(|s| std::io::read_to_string(s).ok())
+        .unwrap_or_default();
+    let status = child.wait().map_err(|e| format!("Wait failed: {e}"))?;
+    if !status.success() {
+        let lower = stderr_output.to_ascii_lowercase();
+        let msg = if ["auth", "login", "sign in", "api key", "401"].iter().any(|p| lower.contains(p)) {
+            "Pi CLI is not authenticated. Run `pi /login` in your terminal.".into()
+        } else if stderr_output.trim().is_empty() {
+            format!("pi exited with status {status}")
+        } else {
+            stderr_output.lines().take(3).collect::<Vec<_>>().join("\n")
+        };
+        emit(AiAgentStreamEvent::Error { message: msg });
+    }
+    emit(AiAgentStreamEvent::Done);
+    Ok(session_id)
+}
+
+fn dispatch_pi_event<F>(json: &serde_json::Value, emit: &mut F)
+where
+    F: FnMut(AiAgentStreamEvent),
+{
+    match json["type"].as_str().unwrap_or_default() {
+        "message_update" => {
+            let event = &json["assistantMessageEvent"];
+            match event["type"].as_str().unwrap_or_default() {
+                "text_delta" => {
+                    if let Some(delta) = event["delta"].as_str() {
+                        emit(AiAgentStreamEvent::TextDelta { text: delta.to_string() });
+                    }
+                }
+                "thinking_delta" => {
+                    if let Some(delta) = event["delta"].as_str() {
+                        emit(AiAgentStreamEvent::ThinkingDelta { text: delta.to_string() });
+                    }
+                }
+                _ => {}
+            }
+        }
+        "tool_execution_start" => {
+            emit(AiAgentStreamEvent::ToolStart {
+                tool_name: json["toolName"].as_str().unwrap_or("tool").to_string(),
+                tool_id: json["toolCallId"].as_str().unwrap_or("tool").to_string(),
+                input: json.get("args").map(|a| a.to_string()),
+            });
+        }
+        "tool_execution_end" => {
+            emit(AiAgentStreamEvent::ToolDone {
+                tool_id: json["toolCallId"].as_str().unwrap_or("tool").to_string(),
+                output: json.get("result").map(|r| r.to_string()),
+            });
+        }
+        "error" => {
+            if let Some(msg) = json["message"].as_str().or_else(|| json["error"].as_str()) {
+                emit(AiAgentStreamEvent::Error { message: msg.to_string() });
+            }
+        }
+        _ => {}
     }
 }
 
-fn is_codex_auth_error(lower: &str) -> bool {
-    ["auth", "login", "sign in"]
-        .iter()
-        .any(|pattern| lower.contains(pattern))
+// ── Gemini ──────────────────────────────────────────────────────────────────
+
+fn run_gemini_agent_stream<F>(request: AiAgentStreamRequest, mut emit: F) -> Result<String, String>
+where
+    F: FnMut(AiAgentStreamEvent),
+{
+    let binary = crate::gemini_discovery::find_binary()?;
+    let prompt = build_prompt(&request.message, request.system_prompt.as_deref());
+
+    let mut command = Command::new(&binary);
+    command
+        .args(["--output-format", "stream-json", "--approval-mode", "auto_edit"])
+        .arg("--prompt")
+        .arg(&prompt)
+        .env("NO_COLOR", "1")
+        .current_dir(&request.vault_path)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let mut child = command.spawn().map_err(|e| format!("Failed to spawn gemini: {e}"))?;
+    let stdout = child.stdout.take().ok_or("No stdout handle")?;
+    let reader = std::io::BufReader::new(stdout);
+    let mut session_id = String::new();
+
+    for line in reader.lines() {
+        let line = match line {
+            Ok(line) => line,
+            Err(e) => {
+                emit(AiAgentStreamEvent::Error { message: format!("Read error: {e}") });
+                break;
+            }
+        };
+        if line.trim().is_empty() {
+            continue;
+        }
+        let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) else {
+            continue;
+        };
+        if let Some(id) = json["session_id"].as_str() {
+            if session_id.is_empty() {
+                session_id = id.to_string();
+            }
+        }
+        dispatch_gemini_event(&json, &mut emit);
+    }
+
+    let stderr_output = child.stderr.take()
+        .and_then(|s| std::io::read_to_string(s).ok())
+        .unwrap_or_default();
+    let status = child.wait().map_err(|e| format!("Wait failed: {e}"))?;
+    if !status.success() {
+        let lower = stderr_output.to_ascii_lowercase();
+        let msg = if ["auth", "login", "api key", "gemini_api_key", "oauth", "401"]
+            .iter().any(|p| lower.contains(p))
+        {
+            "Gemini CLI is not authenticated. Run `gemini` in your terminal to sign in, or set GEMINI_API_KEY.".into()
+        } else if stderr_output.trim().is_empty() {
+            format!("gemini exited with status {status}")
+        } else {
+            stderr_output.lines().take(3).collect::<Vec<_>>().join("\n")
+        };
+        emit(AiAgentStreamEvent::Error { message: msg });
+    }
+    emit(AiAgentStreamEvent::Done);
+    Ok(session_id)
+}
+
+fn dispatch_gemini_event<F>(json: &serde_json::Value, emit: &mut F)
+where
+    F: FnMut(AiAgentStreamEvent),
+{
+    match json["type"].as_str().unwrap_or_default() {
+        "init" => {
+            if let Some(id) = json["session_id"].as_str() {
+                emit(AiAgentStreamEvent::Init { session_id: id.to_string() });
+            }
+        }
+        "message" => {
+            if json["role"].as_str() != Some("assistant") { return; }
+            if let Some(content) = json["content"].as_str().filter(|c| !c.is_empty()) {
+                emit(AiAgentStreamEvent::TextDelta { text: content.to_string() });
+            }
+        }
+        "tool_use" => {
+            let tool_name = json["tool_name"].as_str().unwrap_or("Gemini tool");
+            let tool_id = json["tool_id"].as_str().unwrap_or(tool_name);
+            let input = (!json["parameters"].is_null()).then(|| json["parameters"].to_string());
+            emit(AiAgentStreamEvent::ToolStart {
+                tool_name: tool_name.to_string(),
+                tool_id: tool_id.to_string(),
+                input,
+            });
+        }
+        "tool_result" => {
+            let tool_id = json["tool_id"].as_str().unwrap_or("gemini-tool");
+            let output = json["output"].as_str()
+                .or_else(|| json["error"]["message"].as_str())
+                .map(str::to_string);
+            emit(AiAgentStreamEvent::ToolDone { tool_id: tool_id.to_string(), output });
+        }
+        "error" => {
+            if let Some(msg) = json["message"].as_str() {
+                emit(AiAgentStreamEvent::Error { message: msg.to_string() });
+            }
+        }
+        "result" => {
+            if json["status"].as_str() == Some("error") {
+                if let Some(msg) = json["error"]["message"].as_str() {
+                    emit(AiAgentStreamEvent::Error { message: msg.to_string() });
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+// ── Shared helpers ──────────────────────────────────────────────────────────
+
+fn build_prompt(message: &str, system_prompt: Option<&str>) -> String {
+    match system_prompt.map(str::trim).filter(|p| !p.is_empty()) {
+        Some(sp) => format!("System instructions:\n{sp}\n\nUser request:\n{message}"),
+        None => message.to_string(),
+    }
 }
 
 fn map_claude_event(event: crate::claude_cli::ClaudeStreamEvent) -> Option<AiAgentStreamEvent> {
@@ -414,15 +580,9 @@ fn map_claude_event(event: crate::claude_cli::ClaudeStreamEvent) -> Option<AiAge
         crate::claude_cli::ClaudeStreamEvent::ThinkingDelta { text } => {
             Some(AiAgentStreamEvent::ThinkingDelta { text })
         }
-        crate::claude_cli::ClaudeStreamEvent::ToolStart {
-            tool_name,
-            tool_id,
-            input,
-        } => Some(AiAgentStreamEvent::ToolStart {
-            tool_name,
-            tool_id,
-            input,
-        }),
+        crate::claude_cli::ClaudeStreamEvent::ToolStart { tool_name, tool_id, input } => {
+            Some(AiAgentStreamEvent::ToolStart { tool_name, tool_id, input })
+        }
         crate::claude_cli::ClaudeStreamEvent::ToolDone { tool_id, output } => {
             Some(AiAgentStreamEvent::ToolDone { tool_id, output })
         }
@@ -439,157 +599,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn normalize_status_contains_both_agents() {
+    fn normalize_status_contains_all_agents() {
         let status = get_ai_agents_status();
         assert!(matches!(status.claude_code.installed, true | false));
         assert!(matches!(status.codex.installed, true | false));
+        assert!(matches!(status.pi.installed, true | false));
+        assert!(matches!(status.gemini.installed, true | false));
     }
 
     #[test]
-    fn build_codex_prompt_keeps_system_prompt_first() {
-        let prompt = build_codex_prompt(&AiAgentStreamRequest {
-            agent: AiAgentId::Codex,
-            message: "Rename the note".into(),
-            system_prompt: Some("Be concise".into()),
-            vault_path: "/tmp/vault".into(),
-        });
-
+    fn build_prompt_keeps_system_prompt_first() {
+        let prompt = build_prompt("Rename the note", Some("Be concise"));
         assert!(prompt.starts_with("System instructions:\nBe concise"));
         assert!(prompt.contains("User request:\nRename the note"));
     }
 
     #[test]
-    fn build_codex_args_uses_safe_default_permissions() {
-        if let Ok(args) = build_codex_args(&AiAgentStreamRequest {
-            agent: AiAgentId::Codex,
-            message: "Rename the note".into(),
-            system_prompt: None,
-            vault_path: "/tmp/vault".into(),
-        }) {
-            assert!(!args.contains(&"--dangerously-bypass-approvals-and-sandbox".to_string()));
-            assert!(args.contains(&"--json".to_string()));
-            assert!(args.contains(&"-C".to_string()));
-        }
-    }
-
-    #[test]
-    fn codex_binary_candidates_include_supported_macos_installs() {
-        let home = PathBuf::from("/Users/alex");
-        let candidates = codex_binary_candidates_for_home(&home);
-        let expected = [
-            home.join(".local/bin/codex"),
-            home.join(".codex/bin/codex"),
-            home.join(".local/share/mise/shims/codex"),
-            home.join(".asdf/shims/codex"),
-            home.join(".npm-global/bin/codex"),
-            home.join(".bun/bin/codex"),
-            PathBuf::from("/Applications/Codex.app/Contents/Resources/codex"),
-        ];
-
-        for candidate in expected {
-            assert!(
-                candidates.contains(&candidate),
-                "missing {}",
-                candidate.display()
-            );
-        }
-    }
-
-    #[test]
-    fn first_existing_path_skips_empty_and_missing_lines() {
-        let dir = tempfile::tempdir().unwrap();
-        let missing = dir.path().join("missing-codex");
-        let codex = dir.path().join("codex");
-        std::fs::write(&codex, "#!/bin/sh\n").unwrap();
-
-        let stdout = format!("\n{}\n{}\n", missing.display(), codex.display());
-
-        assert_eq!(first_existing_path(&stdout), Some(codex));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn command_path_from_shell_finds_codex_from_login_shell() {
-        use std::os::unix::fs::PermissionsExt;
-
-        let dir = tempfile::tempdir().unwrap();
-        let codex = dir.path().join("codex");
-        std::fs::write(&codex, "#!/bin/sh\n").unwrap();
-        std::fs::set_permissions(&codex, std::fs::Permissions::from_mode(0o755)).unwrap();
-
-        let shell = dir.path().join("shell");
-        std::fs::write(
-            &shell,
-            format!(
-                "#!/bin/sh\nif [ \"$1\" = \"-lc\" ]; then echo '{}'; fi\n",
-                codex.display()
-            ),
-        )
-        .unwrap();
-        std::fs::set_permissions(&shell, std::fs::Permissions::from_mode(0o755)).unwrap();
-
-        assert_eq!(command_path_from_shell(&shell, "codex"), Some(codex));
-    }
-
-    #[test]
-    fn dispatch_codex_command_events_maps_to_bash_events() {
-        let mut events = Vec::new();
-        let started = serde_json::json!({
-            "type": "item.started",
-            "item": {
-                "id": "item_1",
-                "type": "command_execution",
-                "command": "/bin/zsh -lc pwd"
-            }
-        });
-        let completed = serde_json::json!({
-            "type": "item.completed",
-            "item": {
-                "id": "item_1",
-                "type": "command_execution",
-                "aggregated_output": "/private/tmp\n"
-            }
-        });
-
-        dispatch_codex_event(&started, &mut |event| events.push(event));
-        dispatch_codex_event(&completed, &mut |event| events.push(event));
-
-        assert!(matches!(
-            &events[0],
-            AiAgentStreamEvent::ToolStart { tool_name, tool_id, .. }
-                if tool_name == "Bash" && tool_id == "item_1"
-        ));
-        assert!(matches!(
-            &events[1],
-            AiAgentStreamEvent::ToolDone { tool_id, output }
-                if tool_id == "item_1" && output.as_deref() == Some("/private/tmp\n")
-        ));
-    }
-
-    #[test]
-    fn dispatch_codex_agent_message_maps_to_text_delta() {
-        let mut events = Vec::new();
-        let completed = serde_json::json!({
-            "type": "item.completed",
-            "item": {
-                "id": "item_2",
-                "type": "agent_message",
-                "text": "All set"
-            }
-        });
-
-        dispatch_codex_event(&completed, &mut |event| events.push(event));
-
-        assert!(matches!(
-            &events[0],
-            AiAgentStreamEvent::TextDelta { text } if text == "All set"
-        ));
-    }
-
-    #[test]
-    fn map_claude_done_event_preserves_completion_signal() {
-        let mapped = map_claude_event(crate::claude_cli::ClaudeStreamEvent::Done);
-
-        assert!(matches!(mapped, Some(AiAgentStreamEvent::Done)));
+    fn build_prompt_skips_blank_system_prompt() {
+        assert_eq!(build_prompt("Hello", Some("  ")), "Hello");
     }
 }

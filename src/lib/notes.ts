@@ -20,6 +20,7 @@ export interface NoteSummary {
 }
 
 export interface NoteDocument {
+  id: string;
   path: string;
   title: string;
   content: string;
@@ -28,6 +29,17 @@ export interface NoteDocument {
   lecture: number | null;
   date: string | null;
   location: string | null;
+}
+
+export interface NoteInput {
+  id: string;
+  course_id: string;
+  title: string;
+  content: string;
+  lecture_num: number | null;
+  lecture_date: string | null;
+  location: string | null;
+  pinned: boolean;
 }
 
 export interface LectureSeed {

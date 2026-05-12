@@ -22,12 +22,26 @@ export default function SettingsPanel({ onClose, onResetOnboarding, thresholds, 
   const courseCount = coursesRaw ? JSON.parse(coursesRaw).length : 0;
 
   const [draft, setDraft] = useState<GradeThresholds>({ ...thresholds });
+  const [copyLabel, setCopyLabel] = useState("Copy");
 
   function handleThresholdInput(grade: 1 | 2 | 3 | 4 | 5, raw: string) {
     const val = Math.min(100, Math.max(0, Number(raw) || 0));
     const next = { ...draft, [grade]: val };
     setDraft(next);
     onThresholdsChange(next);
+  }
+
+  async function handleCopyIcalUrl() {
+    if (!icalUrl) return;
+
+    try {
+      await navigator.clipboard.writeText(icalUrl);
+      setCopyLabel("Copied");
+      window.setTimeout(() => setCopyLabel("Copy"), 1200);
+    } catch {
+      setCopyLabel("Failed");
+      window.setTimeout(() => setCopyLabel("Copy"), 1200);
+    }
   }
 
   function handleReset() {
@@ -49,9 +63,19 @@ export default function SettingsPanel({ onClose, onResetOnboarding, thresholds, 
           <div className="sp-section-label">CALENDAR</div>
           <div className="sp-field">
             <span className="sp-field-label">iCal URL</span>
-            <span className="sp-field-value" title={icalUrl}>
-              {icalUrl || <span className="sp-field-empty">Not set</span>}
-            </span>
+            <div className="sp-field-value-row">
+              <span className="sp-field-value" title={icalUrl}>
+                {icalUrl || <span className="sp-field-empty">Not set</span>}
+              </span>
+              <button
+                className="sp-copy-btn"
+                onClick={handleCopyIcalUrl}
+                disabled={!icalUrl}
+                title="Copy iCal URL"
+              >
+                {copyLabel}
+              </button>
+            </div>
           </div>
           <div className="sp-field">
             <span className="sp-field-label">Courses</span>

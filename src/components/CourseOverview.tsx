@@ -7,23 +7,17 @@ import {
   formatTime,
   formatDate,
 } from "../lib/events";
-
-const MOCK_NOTES = [
-  { id: "n14", title: "Eigenvalues · intuition",   lecture: 14,   date: "Wed 11 Mar" },
-  { id: "n13", title: "Basis changes",              lecture: 13,   date: "Mon 9 Mar"  },
-  { id: "n12", title: "Determinants — geometric",   lecture: 12,   date: "Fri 6 Mar"  },
-  { id: "ps",  title: "Problem set 5 · scratch",   lecture: null, date: "Tue 10 Mar" },
-  { id: "study", title: "Midterm review notes",    lecture: null, date: "1w ago"      },
-];
+import type { ApiNoteSummary } from "../lib/notesApi";
 
 interface Props {
   course: Course;
   courseId: string;
   events: CalEvent[];
+  notes: ApiNoteSummary[];
   onOpenNotes: () => void;
 }
 
-export default function CourseOverview({ course, courseId, events, onOpenNotes }: Props) {
+export default function CourseOverview({ course, courseId, events, notes, onOpenNotes }: Props) {
   const now = new Date();
 
   const courseEvents = sortByStart(
@@ -145,28 +139,38 @@ export default function CourseOverview({ course, courseId, events, onOpenNotes }
             )}
             <div className="cov-info-row">
               <span className="cov-info-label">Notes</span>
-              <span className="cov-info-value">{MOCK_NOTES.length}</span>
+              <span className="cov-info-value">{notes.length}</span>
             </div>
           </div>
 
           {/* Recent notes */}
           <div className="cov-section-head" style={{ marginTop: 28 }}>Recent notes</div>
           <div className="cov-notes">
-            {MOCK_NOTES.slice(0, 4).map((n) => (
-              <div key={n.id} className="cov-note-row" onClick={onOpenNotes}>
-                <div className="cov-note-left">
-                  {n.lecture != null ? (
-                    <span className="cov-note-lect" style={{ background: `${course.color}1A`, color: course.color }}>
-                      L{n.lecture}
-                    </span>
-                  ) : (
-                    <span className="cov-note-lect cov-note-lect-plain">—</span>
-                  )}
+            {notes.length === 0 ? (
+              <div className="cov-empty">No notes yet</div>
+            ) : (
+              notes.slice(0, 4).map((n) => (
+                <div key={n.id} className="cov-note-row" onClick={onOpenNotes}>
+                  <div className="cov-note-left">
+                    {n.lectureNum != null ? (
+                      <span className="cov-note-lect" style={{ background: `${course.color}1A`, color: course.color }}>
+                        L{n.lectureNum}
+                      </span>
+                    ) : (
+                      <span className="cov-note-lect cov-note-lect-plain">—</span>
+                    )}
+                  </div>
+                  <span className="cov-note-title">{n.title}</span>
+                  <span className="cov-note-date">
+                    {n.lectureDate
+                      ? new Date(n.lectureDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                      : n.modifiedAt
+                        ? new Date(n.modifiedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                        : ""}
+                  </span>
                 </div>
-                <span className="cov-note-title">{n.title}</span>
-                <span className="cov-note-date">{n.date}</span>
-              </div>
-            ))}
+              ))
+            )}
           </div>
           <button className="cov-notes-btn" onClick={onOpenNotes}
             style={{ borderColor: `${course.color}40`, color: course.color }}>

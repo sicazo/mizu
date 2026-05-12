@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { notesApi } from "../lib/notesApi";
 import PatternBuilder, {
   type CalEvent,
   type DetectedCourse,
@@ -11,7 +12,7 @@ import PatternBuilder, {
 export type { DetectedCourse };
 
 interface OnboardingProps {
-  onComplete: (courses: DetectedCourse[], icalUrl: string) => void;
+  onComplete: (courses: DetectedCourse[], icalUrl: string, notesRoot: string) => void;
 }
 
 // ─── Strategy A: DEPT-NNN course codes ───────────────────────────────────────
@@ -82,8 +83,8 @@ function autoDetect(events: CalEvent[]): DetectedCourse[] {
 
 // ─── Step dots ────────────────────────────────────────────────────────────────
 
-type Step = "welcome" | "calendar" | "courses";
-const STEPS: Step[] = ["calendar", "courses"];
+type Step = "welcome" | "calendar" | "courses" | "notes_folder";
+const STEPS: Step[] = ["calendar", "courses", "notes_folder"];
 
 function StepDots({ current }: { current: Step }) {
   const idx = STEPS.indexOf(current);
@@ -107,6 +108,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   const [events, setEvents] = useState<CalEvent[]>([]);
   const [courses, setCourses] = useState<DetectedCourse[]>([]);
   const [showPatternBuilder, setShowPatternBuilder] = useState(false);
+  const [notesRoot, setNotesRoot] = useState("");
 
   async function handleFetch() {
     if (!url.trim()) return;
@@ -138,7 +140,13 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     localStorage.setItem("mizu-setup-complete", "1");
     localStorage.setItem("mizu-ical-url", url.trim());
     localStorage.setItem("mizu-courses", JSON.stringify(courses));
-    onComplete(courses, url.trim());
+    localStorage.setItem("mizu-notes-root", notesRoot);
+    onComplete(courses, url.trim(), notesRoot);
+  }
+
+  async function handlePickFolder() {
+    const picked = await notesApi.pickFolder();
+    if (picked) setNotesRoot(picked);
   }
 
   return (
@@ -275,8 +283,8 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
                 <div className="ob-actions">
                   <button className="ob-btn-ghost" onClick={() => setStep("calendar")}>← Back</button>
-                  <button className="ob-btn-primary" onClick={handleComplete}>
-                    Open Mizu →
+                  <button className="ob-btn-primary" onClick={() => setStep("notes_folder")}>
+                    Next →
                   </button>
                 </div>
 
@@ -287,6 +295,36 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 )}
               </>
             )}
+          </div>
+        )}
+        {step === "notes_folder" && (
+          <div className="ob-pane">
+            <p className="ob-eyebrow">Step 3 of 3</p>
+            <h2 className="ob-h2">Where should notes live?</h2>
+            <p className="ob-body">
+              Mizu saves your lecture notes as plain markdown files in a folder you choose.
+              You can open, edit, and back them up with any tool.
+            </p>
+
+            <div className="ob-folder-row">
+              <span className="ob-folder-path">
+                {notesRoot || "No folder selected"}
+              </span>
+              <button className="ob-btn-ghost ob-btn-pick" onClick={handlePickFolder}>
+                Choose folder…
+              </button>
+            </div>
+
+            <div className="ob-actions">
+              <button className="ob-btn-ghost" onClick={() => setStep("courses")}>← Back</button>
+              <button className="ob-btn-primary" onClick={handleComplete} disabled={!notesRoot}>
+                Open Mizu →
+              </button>
+            </div>
+
+            <button className="ob-skip" onClick={() => { setNotesRoot(""); handleComplete(); }}>
+              Skip — I'll set this up later
+            </button>
           </div>
         )}
       </div>

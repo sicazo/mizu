@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, NaiveDate, Utc};
 use icalendar::{Calendar, CalendarDateTime, Component, DatePerhapsTime, EventLike};
-use uuid::Uuid;
 use reqwest::header::{ETAG, IF_NONE_MATCH};
 use sqlx::SqlitePool;
 use std::collections::HashSet;
@@ -319,9 +318,17 @@ fn parse_ical(raw: &str) -> Result<Vec<CalEvent>> {
         .iter()
         .filter_map(|c| c.as_event())
         .filter_map(|e| {
-            e.get_uid()?;
+            let base_uid = e.get_uid()?.trim();
+            let recurrence_id = e
+                .property_value("RECURRENCE-ID")
+                .map(str::trim)
+                .filter(|s| !s.is_empty());
+            let stable_uid = recurrence_id
+                .map(|rid| format!("{base_uid}::{rid}"))
+                .unwrap_or_else(|| base_uid.to_owned());
+
             Some(CalEvent {
-                uid: Uuid::new_v4().to_string(),
+                uid: stable_uid,
                 summary: e.get_summary().unwrap_or("(no title)").to_owned(),
                 start: e.get_start().and_then(date_perhaps_time_to_utc),
                 end: e.get_end().and_then(date_perhaps_time_to_utc),
