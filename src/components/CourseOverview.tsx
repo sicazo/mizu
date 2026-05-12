@@ -15,9 +15,10 @@ interface Props {
   events: CalEvent[];
   notes: ApiNoteSummary[];
   onOpenNotes: () => void;
+  onDeleteCourse: () => void;
 }
 
-export default function CourseOverview({ course, courseId, events, notes, onOpenNotes }: Props) {
+export default function CourseOverview({ course, courseId, events, notes, onOpenNotes, onDeleteCourse }: Props) {
   const now = new Date();
 
   const courseEvents = sortByStart(
@@ -39,6 +40,7 @@ export default function CourseOverview({ course, courseId, events, notes, onOpen
   return (
     <section className="cov">
       <div className="cov-head">
+        <button className="cov-delete-course" onClick={onDeleteCourse}>Delete course</button>
         <div>
           <div className="cov-eyebrow">COURSE</div>
           <div className="cov-h1">

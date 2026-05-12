@@ -120,6 +120,149 @@ struct AssignmentInput {
     max_score: f64,
 }
 
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+struct CourseEntry {
+    id: String,
+    code: String,
+    name: String,
+    color: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CourseInput {
+    id: String,
+    code: String,
+    name: String,
+    color: String,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct IgnoredCourseRow {
+    id: String,
+}
+
+async fn ensure_ignored_course_proposals_table(pool: &sqlx::SqlitePool) -> Result<(), String> {
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS ignored_course_proposals (
+            id TEXT PRIMARY KEY,
+            ignored_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )",
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+async fn ensure_courses_table(pool: &sqlx::SqlitePool) -> Result<(), String> {
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS courses (
+            id TEXT PRIMARY KEY,
+            code TEXT NOT NULL,
+            name TEXT NOT NULL,
+            color TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )",
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn courses_list() -> Result<Vec<CourseEntry>, String> {
+    let pool = sqlx::SqlitePool::connect(&app_db_url()?)
+        .await
+        .map_err(|e| e.to_string())?;
+    ensure_courses_table(&pool).await?;
+
+    sqlx::query_as::<_, CourseEntry>(
+        "SELECT id, code, name, color FROM courses ORDER BY code COLLATE NOCASE",
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn courses_save(courses: Vec<CourseInput>) -> Result<(), String> {
+    let pool = sqlx::SqlitePool::connect(&app_db_url()?)
+        .await
+        .map_err(|e| e.to_string())?;
+    ensure_courses_table(&pool).await?;
+
+    let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+    sqlx::query("DELETE FROM courses")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    for c in courses {
+        sqlx::query(
+            "INSERT INTO courses (id, code, name, color, updated_at) VALUES (?, ?, ?, ?, datetime('now'))",
+        )
+        .bind(c.id)
+        .bind(c.code)
+        .bind(c.name)
+        .bind(c.color)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn course_delete(id: String) -> Result<(), String> {
+    let pool = sqlx::SqlitePool::connect(&app_db_url()?)
+        .await
+        .map_err(|e| e.to_string())?;
+    ensure_courses_table(&pool).await?;
+
+    sqlx::query("DELETE FROM courses WHERE id = ?")
+        .bind(id)
+        .execute(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn ignored_course_proposals_list() -> Result<Vec<String>, String> {
+    let pool = sqlx::SqlitePool::connect(&app_db_url()?)
+        .await
+        .map_err(|e| e.to_string())?;
+    ensure_ignored_course_proposals_table(&pool).await?;
+
+    let rows = sqlx::query_as::<_, IgnoredCourseRow>("SELECT id FROM ignored_course_proposals")
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(rows.into_iter().map(|r| r.id).collect())
+}
+
+#[tauri::command]
+async fn ignored_course_proposal_add(id: String) -> Result<(), String> {
+    let pool = sqlx::SqlitePool::connect(&app_db_url()?)
+        .await
+        .map_err(|e| e.to_string())?;
+    ensure_ignored_course_proposals_table(&pool).await?;
+
+    sqlx::query(
+        "INSERT INTO ignored_course_proposals (id, ignored_at)
+         VALUES (?, datetime('now'))
+         ON CONFLICT(id) DO UPDATE SET ignored_at = datetime('now')",
+    )
+    .bind(id)
+    .execute(&pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[tauri::command]
 async fn grades_save(course_id: String, assignments: Vec<AssignmentInput>) -> Result<(), String> {
     let pool = sqlx::SqlitePool::connect(&app_db_url()?)
@@ -686,6 +829,11 @@ pub fn run() {
             fetch_calendar,
             get_events,
             sync_calendar,
+            courses_list,
+            courses_save,
+            course_delete,
+            ignored_course_proposals_list,
+            ignored_course_proposal_add,
             grades_load,
             grades_save,
             mcp_config_snippet,

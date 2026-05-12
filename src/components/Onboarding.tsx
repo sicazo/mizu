@@ -4,10 +4,9 @@ import { notesApi } from "../lib/notesApi";
 import PatternBuilder, {
   type CalEvent,
   type DetectedCourse,
-  type ExtractionRule,
   ACCENT_COLORS,
-  applyExtractionRule,
 } from "./PatternBuilder";
+import { detectCoursesFromEvents } from "../lib/courseDetection";
 
 export type { DetectedCourse };
 
@@ -15,70 +14,13 @@ interface OnboardingProps {
   onComplete: (courses: DetectedCourse[], icalUrl: string, notesRoot: string) => void;
 }
 
-// ─── Strategy A: DEPT-NNN course codes ───────────────────────────────────────
-
-const COURSE_CODE_RE = /\b([A-Za-z]{2,5})[-\s]?(\d{3,4})\b/;
-
-function tryCodeStrategy(events: CalEvent[]): DetectedCourse[] {
-  const map = new Map<string, { name: string; count: number }>();
-  for (const ev of events) {
-    const m = ev.summary.match(COURSE_CODE_RE);
-    if (!m) continue;
-    const code = `${m[1].toUpperCase()}-${m[2]}`;
-    if (!map.has(code)) {
-      const name = ev.summary
-        .replace(new RegExp(`\\b${m[1]}[-\\s]?${m[2]}\\b`, "i"), "")
-        .replace(/^[-–—·:,\s]+|[-–—·:,\s]+$/g, "")
-        .trim();
-      map.set(code, { name: name || code, count: 0 });
-    }
-    map.get(code)!.count++;
-  }
-  return [...map.entries()]
-    .sort((a, b) => b[1].count - a[1].count)
-    .map(([code, { name, count }], i) => ({
-      code, name, lectureCount: count,
-      color: ACCENT_COLORS[i % ACCENT_COLORS.length],
-    }));
-}
-
-// ─── Strategy B: strip prefix + trailing parens/brackets ─────────────────────
-
-function tryNameStrategy(events: CalEvent[]): DetectedCourse[] {
-  // Detect which strips are useful by checking prevalence across events
-  const hasPrefix    = events.filter(e => /^[^:(]{1,25}:\s+/.test(e.summary)).length > events.length * 0.1;
-  const hasParen     = events.filter(e => /\([^)]+\)\s*$/.test(e.summary)).length  > events.length * 0.3;
-  const hasBracket   = events.filter(e => /\[[^\]]+\]\s*$/.test(e.summary)).length  > events.length * 0.1;
-
-  const rule: ExtractionRule = {
-    stripPrefix:  hasPrefix,
-    stripParen:   hasParen,
-    stripBracket: hasBracket,
-  };
-
-  const map = new Map<string, number>();
-  for (const ev of events) {
-    const name = applyExtractionRule(ev.summary, rule);
-    if (!name) continue;
-    map.set(name, (map.get(name) ?? 0) + 1);
-  }
-
-  // Only trust this strategy if multiple events share the same course name
-  const grouped = [...map.entries()].filter(([, count]) => count >= 2);
-  if (grouped.length === 0) return [];
-
-  return grouped
-    .sort((a, b) => b[1] - a[1])
-    .map(([name, count], i) => ({
-      code: name, name, lectureCount: count,
-      color: ACCENT_COLORS[i % ACCENT_COLORS.length],
-    }));
-}
-
 function autoDetect(events: CalEvent[]): DetectedCourse[] {
-  const byCode = tryCodeStrategy(events);
-  if (byCode.length > 0) return byCode;
-  return tryNameStrategy(events);
+  return detectCoursesFromEvents(events).map((course, i) => ({
+    code: course.code,
+    name: course.name,
+    lectureCount: course.lectureCount,
+    color: ACCENT_COLORS[i % ACCENT_COLORS.length],
+  }));
 }
 
 // ─── Step dots ────────────────────────────────────────────────────────────────
@@ -139,7 +81,6 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   function handleComplete() {
     localStorage.setItem("mizu-setup-complete", "1");
     localStorage.setItem("mizu-ical-url", url.trim());
-    localStorage.setItem("mizu-courses", JSON.stringify(courses));
     localStorage.setItem("mizu-notes-root", notesRoot);
     onComplete(courses, url.trim(), notesRoot);
   }

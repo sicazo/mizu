@@ -17,6 +17,7 @@ import CommandPalette, { type PaletteCommand } from "./components/CommandPalette
 import SettingsPanel from "./components/SettingsPanel";
 import Onboarding, { type DetectedCourse } from "./components/Onboarding";
 import { type CalEvent } from "./lib/events";
+import { detectCoursesFromEvents } from "./lib/courseDetection";
 import { useUiActions } from "./hooks/useUiActions";
 import StatusBar from "./components/StatusBar";
 import { useAiSettings } from "./hooks/useAiSettings";
@@ -24,6 +25,12 @@ import { useAiSettings } from "./hooks/useAiSettings";
 export type GradeThresholds = { 1: number; 2: number; 3: number; 4: number; 5: number };
 
 const DEFAULT_THRESHOLDS: GradeThresholds = { 1: 90, 2: 80, 3: 70, 4: 60, 5: 50 };
+
+interface GradeAssignmentRow {
+  weight: number;
+  earned: number | null;
+  max_score: number;
+}
 
 function loadThresholds(): GradeThresholds {
   try {
@@ -36,21 +43,25 @@ function loadThresholds(): GradeThresholds {
 }
 
 function loadCourses(): Record<string, { code: string; name: string; color: string }> {
-  try {
-    const stored = localStorage.getItem("mizu-courses");
-    if (!stored) return {};
-    const arr: DetectedCourse[] = JSON.parse(stored);
-    return Object.fromEntries(
-      arr.map((c) => [c.code.toLowerCase().replace("-", ""), { code: c.code, name: c.name, color: c.color }])
-    );
-  } catch {
-    return {};
-  }
+  return {};
 }
 
 function loadTheme(): "light" | "dark" {
   const stored = localStorage.getItem("mizu-theme");
   return stored === "light" ? "light" : "dark";
+}
+
+function courseKey(code: string): string {
+  return code.toLowerCase().replace(/-/g, "");
+}
+
+function weightedAverage(assignments: GradeAssignmentRow[]): number | null {
+  const done = assignments.filter((a) => a.earned !== null);
+  if (done.length === 0) return null;
+  const totalWeight = done.reduce((s, a) => s + a.weight, 0);
+  if (totalWeight <= 0) return null;
+  const sum = done.reduce((s, a) => s + ((a.earned ?? 0) / a.max_score) * 100 * a.weight, 0);
+  return sum / totalWeight;
 }
 
 export default function App() {
@@ -59,6 +70,11 @@ export default function App() {
   const [courses, setCourses] = useState<Record<string, { code: string; name: string; color: string }>>(loadCourses);
   const [events, setEvents] = useState<CalEvent[]>([]);
   const [thresholds, setThresholds] = useState<GradeThresholds>(loadThresholds);
+  const [courseAverages, setCourseAverages] = useState<Record<string, number | null>>({});
+  const [ignoredCourseProposals, setIgnoredCourseProposals] = useState<string[]>([]);
+  const [pendingDismissedProposal, setPendingDismissedProposal] = useState<string | null>(null);
+  const dismissProposalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingDismissProposalIdRef = useRef<string | null>(null);
 
   const [activeNav, setActiveNav] = useState("today");
   const [courseView, setCourseView] = useState<"overview" | "notes">("overview");
@@ -86,9 +102,50 @@ export default function App() {
       console.error("[App] Failed to load all notes:", err);
     }
   }, []);
+
+  const refreshCourses = useCallback(async () => {
+    try {
+      const rows = await invoke<Array<{ id: string; code: string; name: string; color: string }>>("courses_list");
+      const map = Object.fromEntries(rows.map((c) => [c.id, { code: c.code, name: c.name, color: c.color }]));
+      setCourses(map);
+    } catch (err) {
+      console.error("[App] Failed to load courses:", err);
+    }
+  }, []);
   useEffect(() => {
     if (setupDone) refreshAllNotes();
   }, [setupDone, refreshAllNotes, notes.length]);
+
+  useEffect(() => {
+    if (setupDone) refreshCourses();
+  }, [setupDone, refreshCourses]);
+
+  useEffect(() => {
+    if (!setupDone) return;
+    invoke<string[]>("ignored_course_proposals_list")
+      .then(setIgnoredCourseProposals)
+      .catch((err) => console.error("[App] Failed to load ignored course proposals:", err));
+  }, [setupDone]);
+
+  const refreshCourseAverages = useCallback(async () => {
+    const entries = Object.keys(courses);
+    const pairs = await Promise.all(entries.map(async (courseId) => {
+      try {
+        const rows = await invoke<GradeAssignmentRow[]>("grades_load", { courseId });
+        return [courseId, weightedAverage(rows)] as const;
+      } catch {
+        return [courseId, null] as const;
+      }
+    }));
+    setCourseAverages(Object.fromEntries(pairs));
+  }, [courses]);
+
+  useEffect(() => {
+    if (!setupDone) return;
+    refreshCourseAverages();
+    const id = window.setInterval(refreshCourseAverages, 20_000);
+    return () => window.clearInterval(id);
+  }, [setupDone, refreshCourseAverages]);
 
   const selectAllNotesNote = useCallback(async (id: string) => {
     const summary = allNotes.find((n) => n.id === id);
@@ -204,10 +261,20 @@ export default function App() {
   } = useUiActions();
 
   useEffect(() => {
-    if (setupDone) {
+    if (!setupDone) return;
+
+    const runSync = () => {
       invoke<CalEvent[]>("sync_calendar").then(setEvents).catch(console.error);
-    }
+    };
+
+    runSync();
+    const id = window.setInterval(runSync, 5 * 60 * 1000);
+    return () => window.clearInterval(id);
   }, [setupDone]);
+
+  const courseSuggestions = detectCoursesFromEvents(events)
+    .filter((c) => !courses[courseKey(c.code)])
+    .filter((c) => !ignoredCourseProposals.includes(courseKey(c.code)));
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -251,6 +318,7 @@ export default function App() {
   useEffect(() => {
     return () => {
       if (allNotesSaveTimerRef.current) clearTimeout(allNotesSaveTimerRef.current);
+      if (dismissProposalTimerRef.current) clearTimeout(dismissProposalTimerRef.current);
     };
   }, []);
 
@@ -288,9 +356,12 @@ export default function App() {
 
   function handleOnboardingComplete(detected: DetectedCourse[], _icalUrl: string, notesRoot: string) {
     const map = Object.fromEntries(
-      detected.map((c) => [c.code.toLowerCase().replace("-", ""), { code: c.code, name: c.name, color: c.color }])
+      detected.map((c) => [courseKey(c.code), { code: c.code, name: c.name, color: c.color }])
     );
     setCourses(map);
+    void invoke("courses_save", {
+      courses: Object.entries(map).map(([id, c]) => ({ id, code: c.code, name: c.name, color: c.color })),
+    }).catch((err) => console.error("[App] Failed to save onboarding courses:", err));
     if (notesRoot) localStorage.setItem("mizu-notes-root", notesRoot);
     setSetupDone(true);
     invoke<CalEvent[]>("sync_calendar").then(setEvents).catch(console.error);
@@ -301,6 +372,77 @@ export default function App() {
     setEvents([]);
     setSetupDone(false);
     setShowSettings(false);
+    void invoke("courses_save", { courses: [] }).catch((err) => console.error("[App] Failed to clear courses:", err));
+  }
+
+  function persistCourses(next: Record<string, { code: string; name: string; color: string }>) {
+    void invoke("courses_save", {
+      courses: Object.entries(next).map(([id, c]) => ({ id, code: c.code, name: c.name, color: c.color })),
+    }).catch((err) => console.error("[App] Failed to save courses:", err));
+  }
+
+  function handleAddCourse(code: string, name: string) {
+    setCourses((prev) => {
+      const id = courseKey(code);
+      if (prev[id]) return prev;
+      const next = { ...prev, [id]: { code, name, color: "#718096" } };
+      persistCourses(next);
+      return next;
+    });
+  }
+
+  function handleDeleteCourse(id: string) {
+    setCourses((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      persistCourses(next);
+      return next;
+    });
+    void invoke("course_delete", { id }).catch((err) => console.error("[App] Failed to delete course:", err));
+    if (activeNav === id) {
+      setActiveNav("today");
+      setCourseView("overview");
+    }
+  }
+
+  function commitPendingDismiss() {
+    const id = pendingDismissProposalIdRef.current;
+    if (!id) return;
+    void invoke("ignored_course_proposal_add", { id }).catch((err) =>
+      console.error("[App] Failed to dismiss course proposal:", err),
+    );
+    pendingDismissProposalIdRef.current = null;
+    setPendingDismissedProposal(null);
+    if (dismissProposalTimerRef.current) {
+      clearTimeout(dismissProposalTimerRef.current);
+      dismissProposalTimerRef.current = null;
+    }
+  }
+
+  function handleDismissCourseProposal(code: string) {
+    if (pendingDismissProposalIdRef.current) commitPendingDismiss();
+
+    const id = courseKey(code);
+    setIgnoredCourseProposals((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setPendingDismissedProposal(code);
+    pendingDismissProposalIdRef.current = id;
+
+    dismissProposalTimerRef.current = setTimeout(() => {
+      commitPendingDismiss();
+    }, 5000);
+  }
+
+  function handleUndoDismissCourseProposal() {
+    const pendingId = pendingDismissProposalIdRef.current;
+    if (!pendingId) return;
+    setIgnoredCourseProposals((prev) => prev.filter((id) => id !== pendingId));
+    pendingDismissProposalIdRef.current = null;
+    setPendingDismissedProposal(null);
+    if (dismissProposalTimerRef.current) {
+      clearTimeout(dismissProposalTimerRef.current);
+      dismissProposalTimerRef.current = null;
+    }
   }
 
   const isToday = activeNav === "today";
@@ -353,7 +495,18 @@ export default function App() {
       <div className="app-body">
         {showSidebar && <Sidebar activeId={activeNav} onSelect={handleNavSelect} courses={courses} allNotesCount={allNotes.length} pinnedCount={allNotes.filter((n) => n.pinned).length} />}
         {isToday ? (
-          <TodayView events={events} courses={courses} />
+          <TodayView
+            events={events}
+            courses={courses}
+            allNotes={allNotes}
+            courseSuggestions={courseSuggestions}
+            onAddCourse={handleAddCourse}
+            onDismissCourseSuggestion={handleDismissCourseProposal}
+            dismissedCourseCode={pendingDismissedProposal}
+            onUndoDismissCourseSuggestion={handleUndoDismissCourseProposal}
+            gradeAverages={courseAverages}
+            thresholds={thresholds}
+          />
         ) : isSchedule ? (
           <ScheduleView events={events} courses={courses} />
         ) : isGrades ? (
@@ -427,6 +580,7 @@ export default function App() {
               events={events}
               notes={notes}
               onOpenNotes={() => setCourseView("notes")}
+              onDeleteCourse={() => handleDeleteCourse(activeNav)}
             />
           )
         ) : (
@@ -453,6 +607,7 @@ export default function App() {
             onResetOnboarding={handleResetOnboarding}
             thresholds={thresholds}
             onThresholdsChange={handleThresholdsChange}
+            courseCount={Object.keys(courses).length}
           />
         )}
       </div>

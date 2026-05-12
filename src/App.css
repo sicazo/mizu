@@ -424,6 +424,35 @@ button { font-family: inherit; font-size: inherit; cursor: pointer; }
 .today-stat { text-align: right; }
 .today-stat-num { font-family: var(--mincho); font-size: 40px; font-weight: 600; color: var(--accent-primary); line-height: 1; font-variant-numeric: tabular-nums; }
 .today-stat-lbl { display: block; font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.tdb-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+.tdb-kpi { border: 1px solid var(--border-default); border-radius: 8px; background: var(--surface-card); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.tdb-kpi span { font-size: 11px; color: var(--text-secondary); }
+.tdb-kpi strong { font-size: 20px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.tdb-undo-banner {
+  position: fixed;
+  right: 16px;
+  bottom: 44px;
+  z-index: 80;
+  min-width: 240px;
+  max-width: min(420px, calc(100vw - 32px));
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: var(--surface-panel);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  animation: tdb-toast-in 140ms ease-out;
+}
+
+@keyframes tdb-toast-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 .today-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 40px; }
 .today-col-head { font-size: 11px; font-weight: 500; color: var(--text-secondary); letter-spacing: 0.04em; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border-default); }
 .today-schedule { display: flex; flex-direction: column; gap: 10px; }
@@ -467,6 +496,10 @@ button { font-family: inherit; font-size: inherit; cursor: pointer; }
 .tov-code { font-family: var(--font-mono); font-size: 11px; font-weight: 600; }
 .tov-name { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tov-count { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.tov-course-actions { margin-left: 8px; display: inline-flex; align-items: center; gap: 6px; }
+.tov-btn { border: 1px solid var(--border-default); background: transparent; color: var(--text-secondary); border-radius: 4px; padding: 2px 8px; font-size: 11px; }
+.tov-btn:hover { color: var(--text-primary); border-color: var(--border-strong); }
+.tov-btn-danger:hover { color: var(--accent-red); border-color: var(--accent-red); }
 .tov-week { display: flex; flex-direction: column; gap: 14px; }
 .tov-week-day { display: flex; flex-direction: column; gap: 4px; }
 .tov-day-label { font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
@@ -558,7 +591,9 @@ button { font-family: inherit; font-size: inherit; cursor: pointer; }
 
 /* ===== Course overview ===== */
 .cov { flex: 1; display: flex; flex-direction: column; padding: 32px 40px 48px; overflow-y: auto; min-width: 0; position: relative; }
-.cov-head { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 24px; border-bottom: 1px solid var(--border-default); margin-bottom: 28px; overflow: hidden; }
+.cov-head { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 24px; border-bottom: 1px solid var(--border-default); margin-bottom: 28px; overflow: hidden; position: relative; }
+.cov-delete-course { position: absolute; right: 0; top: 0; border: 1px solid var(--border-default); background: transparent; color: var(--text-secondary); border-radius: 6px; padding: 6px 10px; font-size: 11px; }
+.cov-delete-course:hover { color: var(--accent-red); border-color: var(--accent-red); background: var(--accent-red-light); }
 .cov-eyebrow { font-size: 11px; font-weight: 500; color: var(--text-secondary); letter-spacing: 0.06em; margin-bottom: 6px; }
 .cov-h1 { font-size: 36px; font-weight: 700; letter-spacing: -0.7px; line-height: 1.1; }
 .cov-code { font-family: var(--font-mono); }

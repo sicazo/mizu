@@ -14,12 +14,11 @@ interface SettingsPanelProps {
   onResetOnboarding: () => void;
   thresholds: GradeThresholds;
   onThresholdsChange: (t: GradeThresholds) => void;
+  courseCount: number;
 }
 
-export default function SettingsPanel({ onClose, onResetOnboarding, thresholds, onThresholdsChange }: SettingsPanelProps) {
+export default function SettingsPanel({ onClose, onResetOnboarding, thresholds, onThresholdsChange, courseCount }: SettingsPanelProps) {
   const icalUrl = localStorage.getItem("mizu-ical-url") || "";
-  const coursesRaw = localStorage.getItem("mizu-courses");
-  const courseCount = coursesRaw ? JSON.parse(coursesRaw).length : 0;
 
   const [draft, setDraft] = useState<GradeThresholds>({ ...thresholds });
   const [copyLabel, setCopyLabel] = useState("Copy");
@@ -47,7 +46,6 @@ export default function SettingsPanel({ onClose, onResetOnboarding, thresholds, 
   function handleReset() {
     localStorage.removeItem("mizu-setup-complete");
     localStorage.removeItem("mizu-ical-url");
-    localStorage.removeItem("mizu-courses");
     onResetOnboarding();
   }
 
