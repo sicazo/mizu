@@ -1,7 +1,7 @@
 {
   "name": "mizu",
   "private": true,
-  "version": "0.1.5",
+  "version": "0.1.6",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,11 +10,19 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@blocknote/code-block": "^0.46.2",
+    "@blocknote/core": "^0.46.2",
+    "@blocknote/mantine": "^0.46.2",
+    "@blocknote/react": "^0.46.2",
+    "@mantine/core": "^8.3.18",
     "@tailwindcss/vite": "^4.2.4",
-    "@tauri-apps/api": "^2",
+    "@tauri-apps/api": "2.10.1",
+    "@tauri-apps/plugin-dialog": "2.7.0",
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.10.1",
+    "katex": "^0.16.45",
+    "lucide-react": "^1.14.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "tailwindcss": "^4.2.4"
